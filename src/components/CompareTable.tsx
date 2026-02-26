@@ -137,8 +137,8 @@ const EditableCell: React.FC<{
 
   return (
     <span
-      className={`block truncate max-w-xs font-mono text-sm cursor-pointer ${getTypeColor(value)}`}
-      onClick={startEdit}
+      className={`block truncate max-w-xs font-mono text-sm select-none ${getTypeColor(value)}`}
+      onDoubleClick={startEdit}
     >
       {formatValue(value)}
     </span>
