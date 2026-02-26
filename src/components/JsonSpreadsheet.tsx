@@ -318,6 +318,11 @@ const JsonSpreadsheet: React.FC<JsonSpreadsheetProps> = ({
           selectedColumns={selectedColumns}
           cellRange={cellRange}
           onClose={() => setShowChart(false)}
+          onValueChange={(rowIndex, column, value) => {
+            const newData = [...data];
+            newData[rowIndex] = { ...newData[rowIndex], [column]: value };
+            onDataChange(newData);
+          }}
         />
       )}
     </div>
