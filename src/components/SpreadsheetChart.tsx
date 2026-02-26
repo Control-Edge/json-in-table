@@ -47,6 +47,7 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
   onValueChange,
 }) => {
   const [xAxisCol, setXAxisCol] = useState<string | null>(null);
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dragPreview, setDragPreview] = useState<{ dataIndex: number; column: string; value: number } | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -270,7 +271,25 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
               color: "hsl(var(--popover-foreground))",
             }}
           />
-          {numericColumns.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+          {numericColumns.length > 1 && (
+            <Legend
+              wrapperStyle={{ fontSize: 11 }}
+              onClick={(e: any) => {
+                const key = e.dataKey as string;
+                setHiddenSeries((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key);
+                  else next.add(key);
+                  return next;
+                });
+              }}
+              formatter={(value: string) => (
+                <span style={{ color: hiddenSeries.has(value) ? "hsl(var(--muted-foreground))" : undefined, textDecoration: hiddenSeries.has(value) ? "line-through" : undefined, cursor: "pointer" }}>
+                  {value}
+                </span>
+              )}
+            />
+          )}
           {numericColumns.map((col, i) => (
             <Line
               key={col}
@@ -278,9 +297,10 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
               dataKey={col}
               stroke={COLORS[i % COLORS.length]}
               strokeWidth={2}
-              dot={makeDraggableDot(col, COLORS[i % COLORS.length])}
+              dot={hiddenSeries.has(col) ? false : makeDraggableDot(col, COLORS[i % COLORS.length])}
               activeDot={false}
               connectNulls
+              hide={hiddenSeries.has(col)}
             />
           ))}
         </LineChart>
