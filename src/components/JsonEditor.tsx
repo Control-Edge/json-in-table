@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
-import { Upload, ClipboardPaste, X, Download, FileJson, Table, GitBranch, Columns, FileSpreadsheet } from "lucide-react";
+import { Upload, ClipboardPaste, X, Download, FileJson, Table, GitBranch, Columns, Sun, Moon, Monitor } from "lucide-react";
+import { useTheme } from "@/hooks/use-theme";
 import JsonSpreadsheet from "./JsonSpreadsheet";
 import JsonTreeEditor from "./JsonTreeEditor";
 import ComparePickerTree from "./ComparePickerTree";
@@ -244,6 +245,7 @@ const JsonEditor: React.FC = () => {
   const [showPaste, setShowPaste] = useState(false);
   const [pasteValue, setPasteValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const { theme, setTheme } = useTheme();
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -428,6 +430,26 @@ const JsonEditor: React.FC = () => {
           <h1 className="text-sm font-semibold tracking-tight">JSON Editor</h1>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center rounded bg-secondary p-0.5 gap-0.5">
+            {([
+              { value: "light" as const, icon: <Sun size={13} /> },
+              { value: "dark" as const, icon: <Moon size={13} /> },
+              { value: "system" as const, icon: <Monitor size={13} /> },
+            ]).map(({ value, icon }) => (
+              <button
+                key={value}
+                onClick={() => setTheme(value)}
+                className={`p-1.5 rounded transition-colors ${
+                  theme === value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title={value.charAt(0).toUpperCase() + value.slice(1)}
+              >
+                {icon}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setShowPaste(!showPaste)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
