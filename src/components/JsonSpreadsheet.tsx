@@ -215,7 +215,7 @@ const JsonSpreadsheet: React.FC<JsonSpreadsheetProps> = ({
 
       {/* Spreadsheet */}
       <div className="overflow-auto flex-1 relative">
-        <table className="border-collapse w-full" style={{ minWidth: columns.length * 160 + 100 }}>
+        <table className="border-collapse w-full select-none" style={{ minWidth: columns.length * 160 + 100 }}>
           <thead className="sticky top-0 z-20">
             <tr>
               <th className="row-number sticky left-0 z-30">#</th>
