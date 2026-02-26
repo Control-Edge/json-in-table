@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { Upload, ClipboardPaste, X, Download, FileJson, Table, GitBranch, Columns } from "lucide-react";
+import { Upload, ClipboardPaste, X, Download, FileJson, Table, GitBranch, Columns, FileSpreadsheet } from "lucide-react";
 import JsonSpreadsheet from "./JsonSpreadsheet";
 import JsonTreeEditor from "./JsonTreeEditor";
 import ComparePickerTree from "./ComparePickerTree";
@@ -123,6 +123,55 @@ const flattenForSpreadsheet = (parsed: unknown): Record<string, unknown>[] => {
   return rows.map((row) => flattenObject(row));
 };
 
+const parseCsv = (text: string): { rows: Record<string, unknown>[]; columns: string[] } => {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row");
+  
+  const parseLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+        else if (ch === '"') inQuotes = false;
+        else current += ch;
+      } else {
+        if (ch === '"') inQuotes = true;
+        else if (ch === ",") { result.push(current.trim()); current = ""; }
+        else current += ch;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const headers = parseLine(lines[0]);
+  const rows = lines.slice(1).filter((l) => l.trim()).map((line) => {
+    const values = parseLine(line);
+    const obj: Record<string, unknown> = {};
+    headers.forEach((h, i) => {
+      const v = values[i] ?? "";
+      if (v === "") obj[h] = "";
+      else if (v === "null") obj[h] = null;
+      else if (v === "true") obj[h] = true;
+      else if (v === "false") obj[h] = false;
+      else if (!isNaN(Number(v)) && v !== "") obj[h] = Number(v);
+      else obj[h] = v;
+    });
+    return obj;
+  });
+  return { rows, columns: headers };
+};
+
+const isCsv = (text: string): boolean => {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return false;
+  const commaCount = (lines[0].match(/,/g) || []).length;
+  return commaCount > 0 && lines.slice(1, 4).every((l) => (l.match(/,/g) || []).length >= commaCount - 1);
+};
+
 const JsonEditor: React.FC = () => {
   const [tabs, setTabs] = useState<JsonTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
@@ -149,6 +198,28 @@ const JsonEditor: React.FC = () => {
     }
   }, []);
 
+  const addCsvTab = useCallback((name: string, csvText: string) => {
+    try {
+      const { rows, columns } = parseCsv(csvText);
+      const id = crypto.randomUUID();
+      setTabs((prev) => [...prev, { id, name, rawData: rows, data: rows, columns, viewMode: "spreadsheet" as ViewMode, comparePaths: [] }]);
+      setActiveTabId(id);
+      setError(null);
+      setShowPaste(false);
+      setPasteValue("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Invalid CSV");
+    }
+  }, []);
+
+  const addData = useCallback((name: string, text: string) => {
+    if (isCsv(text)) {
+      addCsvTab(name, text);
+    } else {
+      addTab(name, text);
+    }
+  }, [addTab, addCsvTab]);
+
   const handleFileUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
@@ -157,13 +228,14 @@ const JsonEditor: React.FC = () => {
         const reader = new FileReader();
         reader.onload = (ev) => {
           const text = ev.target?.result as string;
-          addTab(file.name.replace(/\.json$/i, ""), text);
+          const name = file.name.replace(/\.(json|csv)$/i, "");
+          addData(name, text);
         };
         reader.readAsText(file);
       });
       e.target.value = "";
     },
-    [addTab]
+    [addData]
   );
 
   const closeTab = useCallback((id: string) => {
@@ -246,15 +318,15 @@ const JsonEditor: React.FC = () => {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     Array.from(e.dataTransfer.files).forEach((file) => {
-      if (file.name.endsWith(".json")) {
+      if (file.name.endsWith(".json") || file.name.endsWith(".csv")) {
         const reader = new FileReader();
         reader.onload = (ev) => {
-          addTab(file.name.replace(/\.json$/i, ""), ev.target?.result as string);
+          addData(file.name.replace(/\.(json|csv)$/i, ""), ev.target?.result as string);
         };
         reader.readAsText(file);
       }
     });
-  }, [addTab]);
+  }, [addData]);
 
   return (
     <div
@@ -273,11 +345,11 @@ const JsonEditor: React.FC = () => {
             onClick={() => setShowPaste(!showPaste)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
           >
-            <ClipboardPaste size={14} /> Paste JSON
+            <ClipboardPaste size={14} /> Paste
           </button>
           <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer">
             <Upload size={14} /> Upload
-            <input type="file" accept=".json" multiple className="hidden" onChange={handleFileUpload} />
+            <input type="file" accept=".json,.csv" multiple className="hidden" onChange={handleFileUpload} />
           </label>
         </div>
       </header>
@@ -287,14 +359,14 @@ const JsonEditor: React.FC = () => {
         <div className="px-4 py-3 border-b border-border bg-card shrink-0">
           <textarea
             className="w-full h-28 bg-background border border-border rounded p-3 text-xs font-mono text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-            placeholder='Paste your JSON here... e.g. [{"name": "John", "age": 30}]'
+            placeholder='Paste JSON or CSV here...'
             value={pasteValue}
             onChange={(e) => { setPasteValue(e.target.value); setError(null); }}
           />
           {error && <p className="text-destructive text-xs mt-1">{error}</p>}
           <div className="flex gap-2 mt-2">
             <button
-              onClick={() => addTab(`paste_${tabs.length + 1}`, pasteValue)}
+              onClick={() => addData(`paste_${tabs.length + 1}`, pasteValue)}
               className="px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               Load
@@ -414,8 +486,8 @@ const JsonEditor: React.FC = () => {
             <FileJson size={48} className="text-primary/40" />
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium text-foreground mb-1">No JSON loaded</p>
-            <p className="text-xs">Drop JSON files here, upload, or paste JSON to start editing</p>
+            <p className="text-sm font-medium text-foreground mb-1">No data loaded</p>
+            <p className="text-xs">Drop JSON/CSV files here, upload, or paste data to start editing</p>
           </div>
         </div>
       )}
