@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   LineChart,
   Line,
@@ -25,9 +25,7 @@ const COLORS = [
 interface SpreadsheetChartProps {
   data: Record<string, unknown>[];
   columns: string[];
-  /** Selected full columns */
   selectedColumns: Set<number>;
-  /** Selected cell range: {startRow, endRow, startCol, endCol} */
   cellRange: { startRow: number; endRow: number; startCol: number; endCol: number } | null;
   onClose: () => void;
 }
@@ -39,7 +37,8 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
   cellRange,
   onClose,
 }) => {
-  // Determine which columns and row range to chart
+  const [xAxisCol, setXAxisCol] = useState<string | null>(null);
+
   let chartColumns: string[] = [];
   let startRow = 0;
   let endRow = data.length - 1;
@@ -56,13 +55,18 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
     });
   }
 
-  // Filter to only numeric columns
-  const numericColumns = chartColumns.filter((col) =>
-    data.slice(startRow, endRow + 1).some((row) => {
-      const v = row[col];
-      return v !== null && v !== undefined && v !== "" && !isNaN(Number(v));
-    })
-  );
+  // All selected columns (for X axis picker)
+  const allSelectedColumns = [...chartColumns];
+
+  // Numeric columns (excluding the one used as X axis)
+  const numericColumns = chartColumns
+    .filter((col) => col !== xAxisCol)
+    .filter((col) =>
+      data.slice(startRow, endRow + 1).some((row) => {
+        const v = row[col];
+        return v !== null && v !== undefined && v !== "" && !isNaN(Number(v));
+      })
+    );
 
   if (numericColumns.length === 0) {
     return (
@@ -78,9 +82,16 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
     );
   }
 
+  const xKey = xAxisCol || "__row__";
   const chartData = [];
   for (let i = startRow; i <= endRow; i++) {
-    const point: Record<string, unknown> = { row: i + 1 };
+    const point: Record<string, unknown> = {
+      __row__: i + 1,
+    };
+    if (xAxisCol) {
+      const xv = data[i]?.[xAxisCol];
+      point[xAxisCol] = xv !== null && xv !== undefined ? String(xv) : "";
+    }
     numericColumns.forEach((col) => {
       const v = data[i]?.[col];
       point[col] = v !== null && v !== undefined && v !== "" && !isNaN(Number(v)) ? Number(v) : null;
@@ -88,12 +99,29 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
     chartData.push(point);
   }
 
+  const xLabel = xAxisCol || "Row";
+
   return (
-    <div className="border-t border-border bg-card p-4" style={{ height: 280 }}>
+    <div className="border-t border-border bg-card p-4" style={{ height: 300 }}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Chart — {numericColumns.join(", ")}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Chart — {numericColumns.join(", ")}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-muted-foreground">X axis:</label>
+            <select
+              value={xAxisCol || ""}
+              onChange={(e) => setXAxisCol(e.target.value || null)}
+              className="text-xs bg-secondary text-secondary-foreground border border-border rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">Row number</option>
+              {allSelectedColumns.map((col) => (
+                <option key={col} value={col}>{col}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         <button onClick={onClose} className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
           <X size={14} />
         </button>
@@ -102,8 +130,8 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
         <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--grid-line))" />
           <XAxis
-            dataKey="row"
-            label={{ value: "Row", position: "insideBottomRight", offset: -5, style: { fontSize: 11, fill: "hsl(var(--muted-foreground))" } }}
+            dataKey={xKey}
+            label={{ value: xLabel, position: "insideBottomRight", offset: -5, style: { fontSize: 11, fill: "hsl(var(--muted-foreground))" } }}
             tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
             stroke="hsl(var(--border))"
           />
