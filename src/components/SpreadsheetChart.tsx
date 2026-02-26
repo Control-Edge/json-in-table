@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -28,6 +28,14 @@ interface SpreadsheetChartProps {
   selectedColumns: Set<number>;
   cellRange: { startRow: number; endRow: number; startCol: number; endCol: number } | null;
   onClose: () => void;
+  onValueChange: (rowIndex: number, column: string, value: number) => void;
+}
+
+interface DragState {
+  dataIndex: number; // index within chartData
+  column: string;
+  startY: number;
+  startValue: number;
 }
 
 const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
@@ -36,8 +44,12 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
   selectedColumns,
   cellRange,
   onClose,
+  onValueChange,
 }) => {
   const [xAxisCol, setXAxisCol] = useState<string | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ dataIndex: number; column: string; value: number } | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
   let chartColumns: string[] = [];
   let startRow = 0;
@@ -55,10 +67,8 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
     });
   }
 
-  // All selected columns (for X axis picker)
   const allSelectedColumns = [...chartColumns];
 
-  // Numeric columns (excluding the one used as X axis)
   const numericColumns = chartColumns
     .filter((col) => col !== xAxisCol)
     .filter((col) =>
@@ -67,6 +77,129 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
         return v !== null && v !== undefined && v !== "" && !isNaN(Number(v));
       })
     );
+
+  // Compute Y domain
+  let yMin = Infinity;
+  let yMax = -Infinity;
+  for (let i = startRow; i <= endRow; i++) {
+    numericColumns.forEach((col) => {
+      const v = data[i]?.[col];
+      if (v !== null && v !== undefined && v !== "" && !isNaN(Number(v))) {
+        const n = Number(v);
+        if (n < yMin) yMin = n;
+        if (n > yMax) yMax = n;
+      }
+    });
+  }
+  if (!isFinite(yMin)) { yMin = 0; yMax = 100; }
+  // Add 10% padding
+  const yRange = yMax - yMin || 1;
+  const yDomainMin = yMin - yRange * 0.1;
+  const yDomainMax = yMax + yRange * 0.1;
+
+  const xKey = xAxisCol || "__row__";
+  const chartData: Record<string, unknown>[] = [];
+  for (let i = startRow; i <= endRow; i++) {
+    const point: Record<string, unknown> = {
+      __row__: i + 1,
+      __dataRowIndex__: i,
+    };
+    if (xAxisCol) {
+      const xv = data[i]?.[xAxisCol];
+      point[xAxisCol] = xv !== null && xv !== undefined ? String(xv) : "";
+    }
+    numericColumns.forEach((col) => {
+      const v = data[i]?.[col];
+      point[col] = v !== null && v !== undefined && v !== "" && !isNaN(Number(v)) ? Number(v) : null;
+    });
+    chartData.push(point);
+  }
+
+  // Apply drag preview to chartData
+  if (dragPreview) {
+    const pt = chartData[dragPreview.dataIndex];
+    if (pt) {
+      chartData[dragPreview.dataIndex] = { ...pt, [dragPreview.column]: dragPreview.value };
+    }
+  }
+
+  // Get chart area bounds from the SVG
+  const getChartArea = useCallback((): { top: number; bottom: number } | null => {
+    const container = chartContainerRef.current;
+    if (!container) return null;
+    const svg = container.querySelector(".recharts-surface");
+    if (!svg) return null;
+    const cartesian = container.querySelector(".recharts-cartesian-grid");
+    if (!cartesian) return null;
+    const rect = cartesian.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom };
+  }, []);
+
+  const pixelToValue = useCallback((clientY: number): number | null => {
+    const area = getChartArea();
+    if (!area) return null;
+    const fraction = 1 - (clientY - area.top) / (area.bottom - area.top);
+    const clamped = Math.max(0, Math.min(1, fraction));
+    return yDomainMin + clamped * (yDomainMax - yDomainMin);
+  }, [getChartArea, yDomainMin, yDomainMax]);
+
+  useEffect(() => {
+    if (!dragState) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const newValue = pixelToValue(e.clientY);
+      if (newValue === null) return;
+      const rounded = Math.round(newValue * 100) / 100;
+      setDragPreview({ dataIndex: dragState.dataIndex, column: dragState.column, value: rounded });
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      const newValue = pixelToValue(e.clientY);
+      if (newValue !== null) {
+        const rounded = Math.round(newValue * 100) / 100;
+        const rowIndex = chartData[dragState.dataIndex]?.__dataRowIndex__ as number;
+        if (rowIndex !== undefined) {
+          onValueChange(rowIndex, dragState.column, rounded);
+        }
+      }
+      setDragState(null);
+      setDragPreview(null);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [dragState, pixelToValue, chartData, onValueChange]);
+
+  const handleDotMouseDown = useCallback((dataIndex: number, column: string, value: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragState({ dataIndex, column, startY: e.clientY, startValue: value });
+  }, []);
+
+  // Custom dot component for dragging
+  const makeDraggableDot = (column: string, color: string) => {
+    const DraggableDot = (props: any) => {
+      const { cx, cy, index, value } = props;
+      if (cx === undefined || cy === undefined || value === null || value === undefined) return null;
+      return (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={dragState?.dataIndex === index && dragState?.column === column ? 6 : 4}
+          fill={color}
+          stroke="hsl(var(--background))"
+          strokeWidth={2}
+          style={{ cursor: "ns-resize" }}
+          onMouseDown={(e) => handleDotMouseDown(index, column, Number(value), e)}
+        />
+      );
+    };
+    return DraggableDot;
+  };
 
   if (numericColumns.length === 0) {
     return (
@@ -82,27 +215,14 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
     );
   }
 
-  const xKey = xAxisCol || "__row__";
-  const chartData = [];
-  for (let i = startRow; i <= endRow; i++) {
-    const point: Record<string, unknown> = {
-      __row__: i + 1,
-    };
-    if (xAxisCol) {
-      const xv = data[i]?.[xAxisCol];
-      point[xAxisCol] = xv !== null && xv !== undefined ? String(xv) : "";
-    }
-    numericColumns.forEach((col) => {
-      const v = data[i]?.[col];
-      point[col] = v !== null && v !== undefined && v !== "" && !isNaN(Number(v)) ? Number(v) : null;
-    });
-    chartData.push(point);
-  }
-
   const xLabel = xAxisCol || "Row";
 
   return (
-    <div className="border-t border-border bg-card p-4" style={{ height: 300 }}>
+    <div
+      className="border-t border-border bg-card p-4"
+      style={{ height: 300, userSelect: dragState ? "none" : undefined }}
+      ref={chartContainerRef}
+    >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -121,6 +241,7 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
               ))}
             </select>
           </div>
+          <span className="text-[10px] text-muted-foreground/60 italic">Drag points to adjust values</span>
         </div>
         <button onClick={onClose} className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
           <X size={14} />
@@ -136,6 +257,7 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
             stroke="hsl(var(--border))"
           />
           <YAxis
+            domain={[yDomainMin, yDomainMax]}
             tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
             stroke="hsl(var(--border))"
           />
@@ -156,8 +278,8 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
               dataKey={col}
               stroke={COLORS[i % COLORS.length]}
               strokeWidth={2}
-              dot={{ r: 2 }}
-              activeDot={{ r: 4 }}
+              dot={makeDraggableDot(col, COLORS[i % COLORS.length])}
+              activeDot={false}
               connectNulls
             />
           ))}
