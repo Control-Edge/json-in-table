@@ -236,7 +236,7 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
               className="text-xs bg-secondary text-secondary-foreground border border-border rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="">Row number</option>
-              {allSelectedColumns.map((col) => (
+              {columns.map((col) => (
                 <option key={col} value={col}>{col}</option>
               ))}
             </select>
