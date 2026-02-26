@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { X, Download, FileJson, FileSpreadsheet } from "lucide-react";
+import { X, Download, FileJson, FileSpreadsheet, BarChart3 } from "lucide-react";
+import FieldsChart from "./FieldsChart";
 
 interface CompareTableProps {
   data: unknown;
@@ -237,6 +238,8 @@ const escapeCsv = (val: string) => {
 };
 
 const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemovePath, onDataChange }) => {
+  const [showChart, setShowChart] = useState(false);
+
   const handleCellEdit = useCallback((fullPath: string, newValue: unknown) => {
     onDataChange(setAtPath(data, fullPath, newValue));
   }, [data, onDataChange]);
@@ -322,6 +325,12 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border bg-card shrink-0 justify-end">
+          <button
+            onClick={() => setShowChart((v) => !v)}
+            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${showChart ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary hover:bg-secondary/50"}`}
+          >
+            <BarChart3 size={13} /> Chart
+          </button>
           <button onClick={exportCsv} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
             <FileSpreadsheet size={13} /> CSV
           </button>
@@ -439,6 +448,38 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
           </tbody>
         </table>
         </div>
+        {showChart && (
+          <FieldsChart
+            rows={(() => {
+              const primaryPath = arrayPaths[0];
+              const primaryArray = getAtPath(data, primaryPath) as unknown[];
+              return primaryArray.map((item) => {
+                if (item !== null && typeof item === "object") {
+                  return flattenObject(item) as Record<string, unknown>;
+                }
+                return { value: item } as Record<string, unknown>;
+              });
+            })()}
+            columns={(() => {
+              const primaryPath = arrayPaths[0];
+              const primaryArray = getAtPath(data, primaryPath) as unknown[];
+              const colSet = new Set<string>();
+              primaryArray.forEach((item) => {
+                if (item !== null && typeof item === "object") {
+                  Object.keys(flattenObject(item)).forEach((k) => colSet.add(k));
+                } else {
+                  colSet.add("value");
+                }
+              });
+              return Array.from(colSet);
+            })()}
+            onClose={() => setShowChart(false)}
+            onValueChange={(rowIndex, column, value) => {
+              const primaryPath = arrayPaths[0];
+              handleCellEdit(`${primaryPath}.${rowIndex}.${column}`, value);
+            }}
+          />
+        )}
       </div>
     );
   }
