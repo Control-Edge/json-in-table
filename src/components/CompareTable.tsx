@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
-import { X } from "lucide-react";
+import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { X, Download, FileJson, FileSpreadsheet } from "lucide-react";
 
 interface CompareTableProps {
   data: unknown;
@@ -145,10 +145,120 @@ const EditableCell: React.FC<{
   );
 };
 
+/** Build { headers, rows } from current table state for export */
+const useTableData = (data: unknown, selectedPaths: string[]) => {
+  return useMemo(() => {
+    const arrayPaths: string[] = [];
+    const otherPaths: string[] = [];
+    for (const p of selectedPaths) {
+      const val = getAtPath(data, p);
+      if (Array.isArray(val)) arrayPaths.push(p);
+      else otherPaths.push(p);
+    }
+
+    if (arrayPaths.length > 0) {
+      const primaryPath = arrayPaths[0];
+      const primaryArray = getAtPath(data, primaryPath) as unknown[];
+      const colSet = new Set<string>();
+      primaryArray.forEach((item) => {
+        if (item !== null && typeof item === "object") {
+          Object.keys(flattenObject(item)).forEach((k) => colSet.add(k));
+        } else colSet.add("value");
+      });
+      const columns = Array.from(colSet);
+      const shortLabel = (path: string) => path.split(".").pop() || path;
+
+      const extraArrays = arrayPaths.slice(1).map((p) => ({
+        path: p, data: getAtPath(data, p) as unknown[],
+      }));
+      const extraColSets: Map<string, string[]> = new Map();
+      extraArrays.forEach(({ path, data: arr }) => {
+        const cs = new Set<string>();
+        arr.forEach((item) => {
+          if (item !== null && typeof item === "object") Object.keys(flattenObject(item)).forEach((k) => cs.add(k));
+          else cs.add("value");
+        });
+        extraColSets.set(path, Array.from(cs));
+      });
+
+      const headers: string[] = [
+        ...columns.map((c) => `${shortLabel(primaryPath)}.${c}`),
+        ...extraArrays.flatMap(({ path }) => (extraColSets.get(path) || []).map((c) => `${shortLabel(path)}.${c}`)),
+        ...otherPaths.map((p) => shortLabel(p)),
+      ];
+
+      const maxRows = Math.max(primaryArray.length, ...extraArrays.map((e) => e.data.length));
+      const rows: string[][] = [];
+      for (let i = 0; i < maxRows; i++) {
+        const row: string[] = [];
+        const pItem = primaryArray[i];
+        const pFlat = pItem !== null && typeof pItem === "object" ? flattenObject(pItem) : pItem !== undefined ? { value: pItem } : {};
+        columns.forEach((col) => row.push(formatValue((pFlat as Record<string, unknown>)[col])));
+        extraArrays.forEach(({ path, data: arr }) => {
+          const item = arr[i];
+          const flat = item !== null && typeof item === "object" ? flattenObject(item) : item !== undefined ? { value: item } : {};
+          (extraColSets.get(path) || []).forEach((col) => row.push(formatValue((flat as Record<string, unknown>)[col])));
+        });
+        otherPaths.forEach((p) => row.push(formatValue(getAtPath(data, p))));
+        rows.push(row);
+      }
+      return { headers, rows };
+    }
+
+    // Non-array mode
+    const resolvedColumns: { header: string; fullPath: string }[] = [];
+    for (const p of selectedPaths) {
+      const val = getAtPath(data, p);
+      if (val !== null && typeof val === "object" && !Array.isArray(val)) {
+        const flat = flattenObject(val);
+        const shortP = p.split(".").pop() || p;
+        for (const subKey of Object.keys(flat)) resolvedColumns.push({ header: `${shortP}.${subKey}`, fullPath: `${p}.${subKey}` });
+      } else resolvedColumns.push({ header: p, fullPath: p });
+    }
+    return {
+      headers: resolvedColumns.map((c) => c.header),
+      rows: [resolvedColumns.map((c) => formatValue(getAtPath(data, c.fullPath)))],
+    };
+  }, [data, selectedPaths]);
+};
+
+const downloadFile = (content: string, filename: string, mime: string) => {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const escapeCsv = (val: string) => {
+  if (val.includes(",") || val.includes('"') || val.includes("\n")) return `"${val.replace(/"/g, '""')}"`;
+  return val;
+};
+
 const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemovePath, onDataChange }) => {
   const handleCellEdit = useCallback((fullPath: string, newValue: unknown) => {
     onDataChange(setAtPath(data, fullPath, newValue));
   }, [data, onDataChange]);
+
+  const tableData = useTableData(data, selectedPaths);
+
+  const exportCsv = useCallback(() => {
+    const { headers, rows } = tableData;
+    const lines = [headers.map(escapeCsv).join(","), ...rows.map((r) => r.map(escapeCsv).join(","))];
+    downloadFile(lines.join("\n"), "fields-export.csv", "text/csv");
+  }, [tableData]);
+
+  const exportJson = useCallback(() => {
+    const { headers, rows } = tableData;
+    const jsonData = rows.map((row) => {
+      const obj: Record<string, unknown> = {};
+      headers.forEach((h, i) => { obj[h] = parseInput(row[i] === "—" ? "" : row[i]); });
+      return obj;
+    });
+    downloadFile(JSON.stringify(jsonData, null, 2), "fields-export.json", "application/json");
+  }, [tableData]);
 
   if (selectedPaths.length === 0) {
     return (
@@ -211,7 +321,16 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
     const shortLabel = (path: string) => path.split(".").pop() || path;
 
     return (
-      <div className="overflow-auto h-full">
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border bg-card shrink-0 justify-end">
+          <button onClick={exportCsv} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
+            <FileSpreadsheet size={13} /> CSV
+          </button>
+          <button onClick={exportJson} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
+            <FileJson size={13} /> JSON
+          </button>
+        </div>
+        <div className="overflow-auto flex-1">
         <table className="border-collapse w-full">
           <thead className="sticky top-0 z-20">
             <tr>
@@ -322,6 +441,7 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
             })}
           </tbody>
         </table>
+        </div>
       </div>
     );
   }
@@ -351,38 +471,48 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
   }
 
   return (
-    <div className="overflow-auto h-full">
-      <table className="border-collapse w-full" style={{ minWidth: resolvedColumns.length * 160 + 60 }}>
-        <thead className="sticky top-0 z-20">
-          <tr>
-            {resolvedColumns.map((col, i) => (
-              <th key={i} className="grid-header-cell" style={{ minWidth: 140 }}>
-                <div className="flex items-center gap-1">
-                  <span className="truncate text-xs font-mono" title={col.header}>{col.header}</span>
-                  <button
-                    onClick={() => onRemovePath(col.sourcePath)}
-                    className="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            {resolvedColumns.map((col, i) => {
-              const val = getAtPath(data, col.fullPath);
-              return (
-                <td key={i} className="grid-cell">
-                  <EditableCell value={val} onCommit={(v) => handleCellEdit(col.fullPath, v)} />
-                </td>
-              );
-            })}
-          </tr>
-        </tbody>
-      </table>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border bg-card shrink-0 justify-end">
+        <button onClick={exportCsv} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
+          <FileSpreadsheet size={13} /> CSV
+        </button>
+        <button onClick={exportJson} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
+          <FileJson size={13} /> JSON
+        </button>
+      </div>
+      <div className="overflow-auto flex-1">
+        <table className="border-collapse w-full" style={{ minWidth: resolvedColumns.length * 160 + 60 }}>
+          <thead className="sticky top-0 z-20">
+            <tr>
+              {resolvedColumns.map((col, i) => (
+                <th key={i} className="grid-header-cell" style={{ minWidth: 140 }}>
+                  <div className="flex items-center gap-1">
+                    <span className="truncate text-xs font-mono" title={col.header}>{col.header}</span>
+                    <button
+                      onClick={() => onRemovePath(col.sourcePath)}
+                      className="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {resolvedColumns.map((col, i) => {
+                const val = getAtPath(data, col.fullPath);
+                return (
+                  <td key={i} className="grid-cell">
+                    <EditableCell value={val} onCommit={(v) => handleCellEdit(col.fullPath, v)} />
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
