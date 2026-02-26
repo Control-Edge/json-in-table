@@ -213,10 +213,27 @@ const JsonEditor: React.FC = () => {
   }, []);
 
   const addData = useCallback((name: string, text: string) => {
-    if (isCsv(text)) {
-      addCsvTab(name, text);
-    } else {
-      addTab(name, text);
+    const trimmed = text.trim();
+    // Try JSON first if it looks like JSON
+    if (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.startsWith('"')) {
+      try {
+        JSON.parse(trimmed);
+        addTab(name, trimmed);
+        return;
+      } catch {
+        // Not valid JSON, fall through to CSV
+      }
+    }
+    // Try CSV
+    if (isCsv(trimmed)) {
+      addCsvTab(name, trimmed);
+      return;
+    }
+    // Last resort: try JSON anyway to show its error, or CSV
+    try {
+      addCsvTab(name, trimmed);
+    } catch {
+      addTab(name, trimmed);
     }
   }, [addTab, addCsvTab]);
 
