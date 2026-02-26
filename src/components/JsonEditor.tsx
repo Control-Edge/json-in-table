@@ -123,6 +123,44 @@ const flattenForSpreadsheet = (parsed: unknown): Record<string, unknown>[] => {
   return rows.map((row) => flattenObject(row));
 };
 
+/** Check if data is a flat array of uniform objects (like CSV rows) */
+const isFlatArray = (data: unknown): boolean => {
+  if (!Array.isArray(data) || data.length === 0) return false;
+  return data.every((item) =>
+    item !== null && typeof item === "object" && !Array.isArray(item) &&
+    Object.values(item as Record<string, unknown>).every((v) => v === null || typeof v !== "object")
+  );
+};
+
+/** Convert row-oriented [{col1: v1, col2: v2}] to column-oriented {col1: [v1,...], col2: [v2,...]} */
+const rowsToColumnOriented = (rows: Record<string, unknown>[]): Record<string, unknown[]> => {
+  const result: Record<string, unknown[]> = {};
+  const keys = new Set<string>();
+  rows.forEach((row) => Object.keys(row).forEach((k) => keys.add(k)));
+  keys.forEach((k) => { result[k] = rows.map((row) => row[k] ?? null); });
+  return result;
+};
+
+/** Check if data is column-oriented {col: [...], col2: [...]} */
+const isColumnOriented = (data: unknown): boolean => {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return false;
+  const values = Object.values(data as Record<string, unknown>);
+  return values.length > 0 && values.every((v) => Array.isArray(v));
+};
+
+/** Convert column-oriented back to row-oriented */
+const columnOrientedToRows = (data: Record<string, unknown[]>): Record<string, unknown>[] => {
+  const keys = Object.keys(data);
+  const len = Math.max(...keys.map((k) => data[k].length));
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 0; i < len; i++) {
+    const row: Record<string, unknown> = {};
+    keys.forEach((k) => { row[k] = data[k][i] ?? null; });
+    rows.push(row);
+  }
+  return rows;
+};
+
 const detectDelimiter = (text: string): string => {
   const firstLine = text.trim().split(/\r?\n/)[0];
   const tabCount = (firstLine.match(/\t/g) || []).length;
@@ -297,7 +335,11 @@ const JsonEditor: React.FC = () => {
     setTabs((prev) => prev.map((t) => {
       if (t.id !== tabId) return t;
       if (mode === "spreadsheet" && t.viewMode !== "spreadsheet") {
-        const source = t.viewMode === "tree" || t.viewMode === "compare" ? t.rawData : t.rawData;
+        // When coming from compare with column-oriented data, convert back to rows
+        let source = t.rawData;
+        if (t.viewMode === "compare" && isColumnOriented(source)) {
+          source = columnOrientedToRows(source as Record<string, unknown[]>);
+        }
         const flatData = flattenForSpreadsheet(source);
         const columns = extractColumns(flatData);
         return { ...t, viewMode: "spreadsheet", data: flatData, columns };
@@ -307,14 +349,22 @@ const JsonEditor: React.FC = () => {
           const rawData = nested.length === 1 ? nested[0] : nested;
           return { ...t, viewMode: "tree", rawData };
         }
+        if (t.viewMode === "compare" && isColumnOriented(t.rawData)) {
+          const rawData = columnOrientedToRows(t.rawData as Record<string, unknown[]>);
+          return { ...t, viewMode: "tree", rawData };
+        }
         return { ...t, viewMode: "tree" };
       } else if (mode === "compare") {
+        let rawData = t.rawData;
         if (t.viewMode === "spreadsheet") {
           const nested = t.data.map((row) => unflattenObject(row));
-          const rawData = nested.length === 1 ? nested[0] : nested;
-          return { ...t, viewMode: "compare", rawData };
+          rawData = nested.length === 1 ? nested[0] : nested;
         }
-        return { ...t, viewMode: "compare" };
+        // Convert flat array of objects to column-oriented format
+        if (isFlatArray(rawData)) {
+          rawData = rowsToColumnOriented(rawData as Record<string, unknown>[]);
+        }
+        return { ...t, viewMode: "compare", rawData };
       }
       return t;
     }));
