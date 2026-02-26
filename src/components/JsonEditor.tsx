@@ -391,13 +391,7 @@ const JsonEditor: React.FC = () => {
   }, []);
 
   const exportTab = useCallback((tab: JsonTab) => {
-    let exportData: unknown;
-    if (tab.viewMode === "tree") {
-      exportData = tab.rawData;
-    } else {
-      const nested = tab.data.map((row) => unflattenObject(row));
-      exportData = nested;
-    }
+    const exportData = tab.rawData;
     const json = JSON.stringify(exportData, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
