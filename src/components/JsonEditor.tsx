@@ -337,7 +337,7 @@ const JsonEditor: React.FC = () => {
               <>
                 {(["tree", "spreadsheet", "compare"] as ViewMode[]).map((mode) => {
                   const icons = { tree: <GitBranch size={14} />, spreadsheet: <Table size={14} />, compare: <Columns size={14} /> };
-                  const labels = { tree: "Tree", spreadsheet: "Table", compare: "Compare" };
+                  const labels = { tree: "Tree", spreadsheet: "Table", compare: "Fields" };
                   return (
                     <button
                       key={mode}
@@ -377,7 +377,7 @@ const JsonEditor: React.FC = () => {
               <div className="h-full overflow-auto border-r border-border">
                 <div className="px-3 py-2 border-b border-border bg-card">
                   <p className="text-xs text-muted-foreground">
-                    Select leaf values to add as columns
+                    Select fields to view as table columns
                     {activeTab.comparePaths.length > 0 && (
                       <span className="ml-2 text-primary font-medium">({activeTab.comparePaths.length} selected)</span>
                     )}
@@ -396,6 +396,7 @@ const JsonEditor: React.FC = () => {
                 data={activeTab.rawData}
                 selectedPaths={activeTab.comparePaths}
                 onRemovePath={(path) => toggleComparePath(activeTab.id, path)}
+                onDataChange={(rawData) => updateTabRawData(activeTab.id, rawData)}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
