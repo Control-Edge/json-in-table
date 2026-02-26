@@ -1,73 +1,56 @@
-# Welcome to your Lovable project
+# JSON as Table
 
-## Project info
+A fast, browser-based JSON viewer and editor with multiple synchronized views — Tree, Spreadsheet, and Fields — plus side-by-side comparison. Paste or import JSON and explore it instantly.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/demo-json--as--table.lovable.app-green)](https://json-as-table.lovable.app)
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- **Multiple views** — Switch between Tree, Spreadsheet (table), and Fields views, all kept in sync
+- **Tabs** — Work with multiple JSON documents simultaneously
+- **Compare mode** — Side-by-side diff of two JSON structures with highlighted differences
+- **Import / Export** — Load JSON from file or paste it; export as `.json`
+- **Light / Dark / System theme** — Respects your OS preference or set manually
+- **Fully client-side** — No data leaves your browser
 
-**Use Lovable**
+## Demo
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+Try it live at **[json-as-table.lovable.app](https://json-as-table.lovable.app)**
 
-Changes made via Lovable will be committed automatically to this repo.
+## Tech Stack
 
-**Use your preferred IDE**
+- [React](https://react.dev) + [TypeScript](https://www.typescriptlang.org)
+- [Vite](https://vitejs.dev)
+- [Tailwind CSS](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com)
+- [Lucide Icons](https://lucide.dev)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Getting Started
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+# Clone the repo
+git clone https://github.com/<your-username>/json-as-table.git
+cd json-as-table
 
-Follow these steps:
+# Install dependencies
+npm install
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start dev server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Contributing
 
-**Use GitHub Codespaces**
+Contributions are welcome! Feel free to open issues and pull requests.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## What technologies are used for this project?
+## License
 
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
