@@ -267,8 +267,10 @@ const JsonEditor: React.FC = () => {
   const addCsvTab = useCallback((name: string, csvText: string) => {
     try {
       const { rows, columns } = parseCsv(csvText);
+      // Store as column-oriented JSON: {col1: [...], col2: [...]}
+      const colOriented = rowsToColumnOriented(rows);
       const id = crypto.randomUUID();
-      setTabs((prev) => [...prev, { id, name, rawData: rows, data: rows, columns, viewMode: "spreadsheet" as ViewMode, comparePaths: [] }]);
+      setTabs((prev) => [...prev, { id, name, rawData: colOriented, data: rows, columns, viewMode: "spreadsheet" as ViewMode, comparePaths: [] }]);
       setActiveTabId(id);
       setError(null);
       setShowPaste(false);
