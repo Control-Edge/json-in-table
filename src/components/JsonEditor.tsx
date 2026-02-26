@@ -429,7 +429,7 @@ const JsonEditor: React.FC = () => {
           <FileJson className="text-primary" size={22} />
           <h1 className="text-sm font-semibold tracking-tight">JSON Editor</h1>
           <a
-            href="https://github.com/AJaySi/json-as-table"
+            href="https://github.com/Control-Edge/json-in-table"
             target="_blank"
             rel="noopener noreferrer"
             className="ml-2 text-muted-foreground hover:text-foreground transition-colors"
