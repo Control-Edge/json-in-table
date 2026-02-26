@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { X } from "lucide-react";
 
 interface CompareTableProps {
   data: unknown;
   selectedPaths: string[];
   onRemovePath: (path: string) => void;
+  onDataChange: (data: unknown) => void;
 }
 
 const getAtPath = (obj: unknown, pathStr: string): unknown => {
@@ -16,6 +17,26 @@ const getAtPath = (obj: unknown, pathStr: string): unknown => {
     current = (current as Record<string, unknown>)[seg];
   }
   return current;
+};
+
+const setAtPath = (obj: unknown, pathStr: string, value: unknown): unknown => {
+  if (!pathStr) return value;
+  const segments = pathStr.split(".");
+  const clone = (o: unknown): unknown => {
+    if (Array.isArray(o)) return [...o];
+    if (o !== null && typeof o === "object") return { ...(o as Record<string, unknown>) };
+    return o;
+  };
+  const root = clone(obj);
+  let current: unknown = root;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const seg = segments[i];
+    const child = clone((current as Record<string, unknown>)[seg]);
+    (current as Record<string, unknown>)[seg] = child;
+    current = child;
+  }
+  (current as Record<string, unknown>)[segments[segments.length - 1]] = value;
+  return root;
 };
 
 const formatValue = (val: unknown): string => {
@@ -34,7 +55,6 @@ const getTypeColor = (val: unknown): string => {
   return "text-foreground";
 };
 
-/** Flatten an object/array into dot-notation keys with leaf values */
 const flattenObject = (
   obj: unknown,
   prefix = "",
@@ -65,33 +85,79 @@ const flattenObject = (
   return result;
 };
 
-/**
- * Resolve selected paths into table columns.
- * If a selected path points to an array, treat each element as a row and flatten its children as columns.
- * If a selected path points to an object, flatten it into multiple leaf columns.
- * Leaf paths become single columns.
- */
-interface ResolvedColumn {
-  /** Display header */
-  header: string;
-  /** The original selected path this column came from */
-  sourcePath: string;
-  /** Sub-path within each row item (for array sources) or full dot-path for leaf extraction */
-  subPath: string;
-}
+const parseInput = (text: string): unknown => {
+  if (text === "null") return null;
+  if (text === "true") return true;
+  if (text === "false") return false;
+  if (!isNaN(Number(text)) && text.trim() !== "") return Number(text);
+  return text;
+};
 
-const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemovePath }) => {
+/** Inline editable cell */
+const EditableCell: React.FC<{
+  value: unknown;
+  onCommit: (val: unknown) => void;
+}> = ({ value, onCommit }) => {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      ref.current?.focus();
+      ref.current?.select();
+    }
+  }, [editing]);
+
+  const startEdit = () => {
+    setText(value === null ? "null" : value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : String(value));
+    setEditing(true);
+  };
+
+  const commit = () => {
+    onCommit(parseInput(text));
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={ref}
+        className="w-full bg-transparent outline-none font-mono text-sm text-foreground"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") setEditing(false);
+        }}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={`block truncate max-w-xs font-mono text-sm cursor-pointer ${getTypeColor(value)}`}
+      onClick={startEdit}
+    >
+      {formatValue(value)}
+    </span>
+  );
+};
+
+const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemovePath, onDataChange }) => {
+  const handleCellEdit = useCallback((fullPath: string, newValue: unknown) => {
+    onDataChange(setAtPath(data, fullPath, newValue));
+  }, [data, onDataChange]);
+
   if (selectedPaths.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-8">
-        Select values from the tree on the left to compare them here.
+        Select fields from the tree to view them as table columns.
       </div>
     );
   }
 
-  // Determine what we're working with
-  // Find array-type selections — these define rows
-  // Other selections become additional columns per row
   const arrayPaths: string[] = [];
   const otherPaths: string[] = [];
 
@@ -104,32 +170,26 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
     }
   }
 
-  // If we have array selections, use the first (largest) array as row source
-  // and flatten each element's properties as columns
+
   if (arrayPaths.length > 0) {
-    // Use first array as primary row source
     const primaryPath = arrayPaths[0];
     const primaryArray = getAtPath(data, primaryPath) as unknown[];
 
-    // Collect all column keys from all array elements
     const colSet = new Set<string>();
     primaryArray.forEach((item) => {
       if (item !== null && typeof item === "object") {
-        const flat = flattenObject(item);
-        Object.keys(flat).forEach((k) => colSet.add(k));
+        Object.keys(flattenObject(item)).forEach((k) => colSet.add(k));
       } else {
         colSet.add("value");
       }
     });
     const columns = Array.from(colSet);
 
-    // Additional arrays become extra column groups
     const extraArrays = arrayPaths.slice(1).map((p) => ({
       path: p,
       data: getAtPath(data, p) as unknown[],
     }));
 
-    // Extra array columns
     const extraColSets: Map<string, Set<string>> = new Map();
     extraArrays.forEach(({ path, data: arr }) => {
       const cs = new Set<string>();
@@ -148,11 +208,7 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
       ...extraArrays.map((e) => e.data.length)
     );
 
-    // Build header label helper
-    const shortLabel = (path: string) => {
-      const parts = path.split(".");
-      return parts[parts.length - 1];
-    };
+    const shortLabel = (path: string) => path.split(".").pop() || path;
 
     return (
       <div className="overflow-auto h-full">
@@ -160,7 +216,6 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
           <thead className="sticky top-0 z-20">
             <tr>
               <th className="grid-header-cell sticky left-0 z-30 w-12">#</th>
-              {/* Primary array columns */}
               {columns.map((col) => (
                 <th key={`${primaryPath}.${col}`} className="grid-header-cell" style={{ minWidth: 140 }}>
                   <div className="flex items-center gap-1">
@@ -171,7 +226,6 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                   </div>
                 </th>
               ))}
-              {/* Extra array columns */}
               {extraArrays.map(({ path }) =>
                 Array.from(extraColSets.get(path) || []).map((col) => (
                   <th key={`${path}.${col}`} className="grid-header-cell" style={{ minWidth: 140 }}>
@@ -184,7 +238,6 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                   </th>
                 ))
               )}
-              {/* Other leaf/object paths */}
               {otherPaths.map((p) => (
                 <th key={p} className="grid-header-cell" style={{ minWidth: 140 }}>
                   <div className="flex items-center gap-1">
@@ -198,13 +251,10 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                   </div>
                 </th>
               ))}
-              {/* Remove buttons for array paths - in a separate header row area */}
             </tr>
-            {/* Source path labels with remove buttons */}
             <tr>
               <th className="grid-header-cell sticky left-0 z-30 w-12" />
               {arrayPaths.map((p) => {
-                const arr = getAtPath(data, p) as unknown[];
                 const colCount = p === primaryPath
                   ? columns.length
                   : Array.from(extraColSets.get(p) || []).length;
@@ -237,9 +287,10 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                   <td className="row-number sticky left-0 z-10">{rowIndex}</td>
                   {columns.map((col) => {
                     const val = (primaryFlat as Record<string, unknown>)[col];
+                    const fullPath = `${primaryPath}.${rowIndex}.${col}`;
                     return (
-                      <td key={`${primaryPath}.${col}`} className={`grid-cell ${getTypeColor(val)}`}>
-                        <span className="block truncate max-w-xs font-mono text-sm">{formatValue(val)}</span>
+                      <td key={`${primaryPath}.${col}`} className="grid-cell">
+                        <EditableCell value={val} onCommit={(v) => handleCellEdit(fullPath, v)} />
                       </td>
                     );
                   })}
@@ -250,9 +301,10 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                       : item !== undefined ? { value: item } : {};
                     return Array.from(extraColSets.get(path) || []).map((col) => {
                       const val = (flat as Record<string, unknown>)[col];
+                      const fullPath = `${path}.${rowIndex}.${col}`;
                       return (
-                        <td key={`${path}.${col}`} className={`grid-cell ${getTypeColor(val)}`}>
-                          <span className="block truncate max-w-xs font-mono text-sm">{formatValue(val)}</span>
+                        <td key={`${path}.${col}`} className="grid-cell">
+                          <EditableCell value={val} onCommit={(v) => handleCellEdit(fullPath, v)} />
                         </td>
                       );
                     });
@@ -260,8 +312,8 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                   {otherPaths.map((p) => {
                     const val = getAtPath(data, p);
                     return (
-                      <td key={p} className={`grid-cell ${getTypeColor(val)}`}>
-                        <span className="block truncate max-w-xs font-mono text-sm">{formatValue(val)}</span>
+                      <td key={p} className="grid-cell">
+                        <EditableCell value={val} onCommit={(v) => handleCellEdit(p, v)} />
                       </td>
                     );
                   })}
@@ -274,27 +326,26 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
     );
   }
 
-  // No arrays selected — object/leaf mode: flatten objects into columns, show single row
-  const resolvedColumns: { header: string; sourcePath: string; getValue: () => unknown }[] = [];
+  // No arrays — object/leaf mode
+  const resolvedColumns: { header: string; sourcePath: string; fullPath: string }[] = [];
 
   for (const p of selectedPaths) {
     const val = getAtPath(data, p);
     if (val !== null && typeof val === "object" && !Array.isArray(val)) {
-      // Flatten object into multiple columns
       const flat = flattenObject(val);
-      for (const [subKey, subVal] of Object.entries(flat)) {
+      for (const subKey of Object.keys(flat)) {
         const shortP = p.split(".").pop() || p;
         resolvedColumns.push({
           header: `${shortP}.${subKey}`,
           sourcePath: p,
-          getValue: () => subVal,
+          fullPath: `${p}.${subKey}`,
         });
       }
     } else {
       resolvedColumns.push({
         header: p,
         sourcePath: p,
-        getValue: () => val,
+        fullPath: p,
       });
     }
   }
@@ -322,10 +373,10 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
         <tbody>
           <tr>
             {resolvedColumns.map((col, i) => {
-              const val = col.getValue();
+              const val = getAtPath(data, col.fullPath);
               return (
-                <td key={i} className={`grid-cell ${getTypeColor(val)}`}>
-                  <span className="block truncate max-w-xs font-mono text-sm">{formatValue(val)}</span>
+                <td key={i} className="grid-cell">
+                  <EditableCell value={val} onCommit={(v) => handleCellEdit(col.fullPath, v)} />
                 </td>
               );
             })}
