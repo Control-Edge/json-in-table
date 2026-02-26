@@ -107,7 +107,11 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
     };
     if (xAxisCol) {
       const xv = data[i]?.[xAxisCol];
-      point[xAxisCol] = xv !== null && xv !== undefined ? String(xv) : "";
+      if (xv !== null && xv !== undefined && xv !== "" && !isNaN(Number(xv))) {
+        point[xAxisCol] = Number(xv);
+      } else {
+        point[xAxisCol] = xv !== null && xv !== undefined ? String(xv) : "";
+      }
     }
     numericColumns.forEach((col) => {
       const v = data[i]?.[col];
@@ -253,6 +257,7 @@ const SpreadsheetChart: React.FC<SpreadsheetChartProps> = ({
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--grid-line))" />
           <XAxis
             dataKey={xKey}
+            type={xAxisCol && chartData.every((d) => typeof d[xAxisCol] === "number") ? "number" : "category"}
             label={{ value: xLabel, position: "insideBottomRight", offset: -5, style: { fontSize: 11, fill: "hsl(var(--muted-foreground))" } }}
             tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
             stroke="hsl(var(--border))"
