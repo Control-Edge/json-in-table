@@ -49,9 +49,9 @@ const formatValue = (val: unknown): string => {
 const getTypeColor = (val: unknown): string => {
   if (val === undefined) return "text-muted-foreground/40";
   if (val === null) return "text-muted-foreground italic";
-  if (typeof val === "number") return "text-blue-400";
-  if (typeof val === "boolean") return "text-amber-400";
-  if (typeof val === "string") return "text-emerald-400";
+  if (typeof val === "number") return "text-blue-600 dark:text-blue-400";
+  if (typeof val === "boolean") return "text-amber-600 dark:text-amber-400";
+  if (typeof val === "string") return "text-emerald-600 dark:text-emerald-400";
   return "text-foreground";
 };
 
