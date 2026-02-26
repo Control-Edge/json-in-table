@@ -251,10 +251,10 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
 
   const exportJson = useCallback(() => {
     const { headers, rows } = tableData;
-    const jsonData = rows.map((row) => {
-      const obj: Record<string, unknown> = {};
-      headers.forEach((h, i) => { obj[h] = parseInput(row[i] === "—" ? "" : row[i]); });
-      return obj;
+    const jsonData: Record<string, unknown[]> = {};
+    headers.forEach((h) => { jsonData[h] = []; });
+    rows.forEach((row) => {
+      headers.forEach((h, i) => { jsonData[h].push(parseInput(row[i] === "—" ? "" : row[i])); });
     });
     downloadFile(JSON.stringify(jsonData, null, 2), "fields-export.json", "application/json");
   }, [tableData]);
