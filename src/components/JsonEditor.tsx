@@ -123,11 +123,21 @@ const flattenForSpreadsheet = (parsed: unknown): Record<string, unknown>[] => {
   return rows.map((row) => flattenObject(row));
 };
 
+const detectDelimiter = (text: string): string => {
+  const firstLine = text.trim().split(/\r?\n/)[0];
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  return tabCount > commaCount ? "\t" : ",";
+};
+
 const parseCsv = (text: string): { rows: Record<string, unknown>[]; columns: string[] } => {
   const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row");
+  if (lines.length < 2) throw new Error("Data must have a header row and at least one data row");
   
+  const delimiter = detectDelimiter(text);
+
   const parseLine = (line: string): string[] => {
+    if (delimiter === "\t") return line.split("\t").map((s) => s.trim());
     const result: string[] = [];
     let current = "";
     let inQuotes = false;
@@ -147,11 +157,28 @@ const parseCsv = (text: string): { rows: Record<string, unknown>[]; columns: str
     return result;
   };
 
-  const headers = parseLine(lines[0]);
+  const rawHeaders = parseLine(lines[0]);
+  // Deduplicate headers by appending index
+  const headerCount: Record<string, number> = {};
+  const headers = rawHeaders.map((h) => {
+    const name = h || "column";
+    headerCount[name] = (headerCount[name] || 0) + 1;
+    if (headerCount[name] > 1) return `${name}_${headerCount[name]}`;
+    return name;
+  });
+  // Check if any were duped, and if so re-number from 1
+  const finalHeaders = rawHeaders.map((h, i) => {
+    const name = h || "column";
+    const total = rawHeaders.filter((r) => r === name).length;
+    if (total <= 1) return name;
+    const idx = rawHeaders.slice(0, i + 1).filter((r) => r === name).length;
+    return `${name}_${idx}`;
+  });
+
   const rows = lines.slice(1).filter((l) => l.trim()).map((line) => {
     const values = parseLine(line);
     const obj: Record<string, unknown> = {};
-    headers.forEach((h, i) => {
+    finalHeaders.forEach((h, i) => {
       const v = values[i] ?? "";
       if (v === "") obj[h] = "";
       else if (v === "null") obj[h] = null;
@@ -162,14 +189,15 @@ const parseCsv = (text: string): { rows: Record<string, unknown>[]; columns: str
     });
     return obj;
   });
-  return { rows, columns: headers };
+  return { rows, columns: finalHeaders };
 };
 
-const isCsv = (text: string): boolean => {
+const isTabularText = (text: string): boolean => {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return false;
-  const commaCount = (lines[0].match(/,/g) || []).length;
-  return commaCount > 0 && lines.slice(1, 4).every((l) => (l.match(/,/g) || []).length >= commaCount - 1);
+  const delimiter = detectDelimiter(text);
+  const sepCount = (lines[0].match(delimiter === "\t" ? /\t/g : /,/g) || []).length;
+  return sepCount > 0 && lines.slice(1, 4).every((l) => (l.match(delimiter === "\t" ? /\t/g : /,/g) || []).length >= sepCount - 1);
 };
 
 const JsonEditor: React.FC = () => {
@@ -225,7 +253,7 @@ const JsonEditor: React.FC = () => {
       }
     }
     // Try CSV
-    if (isCsv(trimmed)) {
+    if (isTabularText(trimmed)) {
       addCsvTab(name, trimmed);
       return;
     }
