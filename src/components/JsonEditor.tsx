@@ -1,9 +1,12 @@
 import React, { useState, useCallback } from "react";
-import { Upload, ClipboardPaste, X, Download, FileJson, Table, GitBranch } from "lucide-react";
+import { Upload, ClipboardPaste, X, Download, FileJson, Table, GitBranch, Columns } from "lucide-react";
 import JsonSpreadsheet from "./JsonSpreadsheet";
 import JsonTreeEditor from "./JsonTreeEditor";
+import ComparePickerTree from "./ComparePickerTree";
+import CompareTable from "./CompareTable";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./ui/resizable";
 
-type ViewMode = "spreadsheet" | "tree";
+type ViewMode = "spreadsheet" | "tree" | "compare";
 
 interface JsonTab {
   id: string;
@@ -12,6 +15,7 @@ interface JsonTab {
   data: Record<string, unknown>[];
   columns: string[];
   viewMode: ViewMode;
+  comparePaths: string[];
 }
 
 const flattenObject = (
@@ -135,7 +139,7 @@ const JsonEditor: React.FC = () => {
       const flatData = flattenForSpreadsheet(parsed);
       const columns = extractColumns(flatData);
       const id = crypto.randomUUID();
-      setTabs((prev) => [...prev, { id, name, rawData: parsed, data: flatData, columns, viewMode }]);
+      setTabs((prev) => [...prev, { id, name, rawData: parsed, data: flatData, columns, viewMode, comparePaths: [] }]);
       setActiveTabId(id);
       setError(null);
       setShowPaste(false);
@@ -172,20 +176,40 @@ const JsonEditor: React.FC = () => {
     });
   }, [activeTabId]);
 
-  const toggleViewMode = useCallback((tabId: string) => {
+  const toggleViewMode = useCallback((tabId: string, mode: ViewMode) => {
     setTabs((prev) => prev.map((t) => {
       if (t.id !== tabId) return t;
-      if (t.viewMode === "tree") {
-        // Switching to spreadsheet: re-flatten rawData
-        const flatData = flattenForSpreadsheet(t.rawData);
+      if (mode === "spreadsheet" && t.viewMode !== "spreadsheet") {
+        const source = t.viewMode === "tree" || t.viewMode === "compare" ? t.rawData : t.rawData;
+        const flatData = flattenForSpreadsheet(source);
         const columns = extractColumns(flatData);
         return { ...t, viewMode: "spreadsheet", data: flatData, columns };
-      } else {
-        // Switching to tree: unflatten spreadsheet data back
-        const nested = t.data.map((row) => unflattenObject(row));
-        const rawData = nested.length === 1 ? nested[0] : nested;
-        return { ...t, viewMode: "tree", rawData };
+      } else if (mode === "tree" && t.viewMode !== "tree") {
+        if (t.viewMode === "spreadsheet") {
+          const nested = t.data.map((row) => unflattenObject(row));
+          const rawData = nested.length === 1 ? nested[0] : nested;
+          return { ...t, viewMode: "tree", rawData };
+        }
+        return { ...t, viewMode: "tree" };
+      } else if (mode === "compare") {
+        if (t.viewMode === "spreadsheet") {
+          const nested = t.data.map((row) => unflattenObject(row));
+          const rawData = nested.length === 1 ? nested[0] : nested;
+          return { ...t, viewMode: "compare", rawData };
+        }
+        return { ...t, viewMode: "compare" };
       }
+      return t;
+    }));
+  }, []);
+
+  const toggleComparePath = useCallback((tabId: string, path: string) => {
+    setTabs((prev) => prev.map((t) => {
+      if (t.id !== tabId) return t;
+      const paths = t.comparePaths.includes(path)
+        ? t.comparePaths.filter((p) => p !== path)
+        : [...t.comparePaths, path];
+      return { ...t, comparePaths: paths };
     }));
   }, []);
 
@@ -311,14 +335,23 @@ const JsonEditor: React.FC = () => {
           <div className="ml-auto flex items-center gap-1 shrink-0 px-2">
             {activeTab && (
               <>
-                <button
-                  onClick={() => toggleViewMode(activeTab.id)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-primary transition-colors rounded hover:bg-secondary/50"
-                  title={`Switch to ${activeTab.viewMode === "tree" ? "spreadsheet" : "tree"} view`}
-                >
-                  {activeTab.viewMode === "tree" ? <Table size={14} /> : <GitBranch size={14} />}
-                  {activeTab.viewMode === "tree" ? "Table" : "Tree"}
-                </button>
+                {(["tree", "spreadsheet", "compare"] as ViewMode[]).map((mode) => {
+                  const icons = { tree: <GitBranch size={14} />, spreadsheet: <Table size={14} />, compare: <Columns size={14} /> };
+                  const labels = { tree: "Tree", spreadsheet: "Table", compare: "Compare" };
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => toggleViewMode(activeTab.id, mode)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors rounded ${
+                        activeTab.viewMode === mode
+                          ? "text-primary bg-primary/10"
+                          : "text-muted-foreground hover:text-primary hover:bg-secondary/50"
+                      }`}
+                    >
+                      {icons[mode]} {labels[mode]}
+                    </button>
+                  );
+                })}
                 <button
                   onClick={() => exportTab(activeTab)}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-primary transition-colors rounded hover:bg-secondary/50"
@@ -338,6 +371,34 @@ const JsonEditor: React.FC = () => {
             data={activeTab.rawData}
             onDataChange={(rawData) => updateTabRawData(activeTab.id, rawData)}
           />
+        ) : activeTab.viewMode === "compare" ? (
+          <ResizablePanelGroup direction="horizontal" className="flex-1">
+            <ResizablePanel defaultSize={40} minSize={25}>
+              <div className="h-full overflow-auto border-r border-border">
+                <div className="px-3 py-2 border-b border-border bg-card">
+                  <p className="text-xs text-muted-foreground">
+                    Select leaf values to add as columns
+                    {activeTab.comparePaths.length > 0 && (
+                      <span className="ml-2 text-primary font-medium">({activeTab.comparePaths.length} selected)</span>
+                    )}
+                  </p>
+                </div>
+                <ComparePickerTree
+                  data={activeTab.rawData}
+                  selectedPaths={activeTab.comparePaths}
+                  onTogglePath={(path) => toggleComparePath(activeTab.id, path)}
+                />
+              </div>
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={60} minSize={30}>
+              <CompareTable
+                data={activeTab.rawData}
+                selectedPaths={activeTab.comparePaths}
+                onRemovePath={(path) => toggleComparePath(activeTab.id, path)}
+              />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         ) : (
           <JsonSpreadsheet
             data={activeTab.data}
