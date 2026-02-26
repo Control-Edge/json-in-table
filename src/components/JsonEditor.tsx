@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { Upload, ClipboardPaste, X, Download, FileJson, Table, GitBranch, Columns, Sun, Moon, Monitor } from "lucide-react";
+import { Upload, ClipboardPaste, X, Download, FileJson, Table, GitBranch, Columns, Sun, Moon, Monitor, Github } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import JsonSpreadsheet from "./JsonSpreadsheet";
 import JsonTreeEditor from "./JsonTreeEditor";
@@ -428,6 +428,15 @@ const JsonEditor: React.FC = () => {
         <div className="flex items-center gap-2">
           <FileJson className="text-primary" size={22} />
           <h1 className="text-sm font-semibold tracking-tight">JSON Editor</h1>
+          <a
+            href="https://github.com/AJaySi/json-as-table"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-2 text-muted-foreground hover:text-foreground transition-colors"
+            title="View on GitHub"
+          >
+            <Github size={18} />
+          </a>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center rounded bg-secondary p-0.5 gap-0.5">
@@ -600,6 +609,14 @@ const JsonEditor: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Footer */}
+      <footer className="flex items-center justify-center px-4 py-2 border-t border-border shrink-0 text-xs text-muted-foreground gap-1">
+        <span>© {new Date().getFullYear()}</span>
+        <a href="https://cedge.se" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
+          Control Edge AB
+        </a>
+      </footer>
     </div>
   );
 };
