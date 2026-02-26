@@ -330,7 +330,7 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
           </button>
         </div>
         <div className="overflow-auto flex-1">
-        <table className="border-collapse w-full">
+        <table className="border-collapse w-full select-none">
           <thead className="sticky top-0 z-20">
             <tr>
               <th className="grid-header-cell sticky left-0 z-30 w-12">#</th>
@@ -478,7 +478,7 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
         </button>
       </div>
       <div className="overflow-auto flex-1">
-        <table className="border-collapse w-full" style={{ minWidth: resolvedColumns.length * 160 + 60 }}>
+        <table className="border-collapse w-full select-none" style={{ minWidth: resolvedColumns.length * 160 + 60 }}>
           <thead className="sticky top-0 z-20">
             <tr>
               {resolvedColumns.map((col, i) => (
