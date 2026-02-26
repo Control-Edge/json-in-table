@@ -337,42 +337,20 @@ const JsonEditor: React.FC = () => {
     setTabs((prev) => prev.map((t) => {
       if (t.id !== tabId) return t;
       if (mode === "spreadsheet" && t.viewMode !== "spreadsheet") {
-        // When coming from compare with column-oriented data, convert back to rows
+        // Derive display data from rawData without mutating rawData
         let source = t.rawData;
-        if (t.viewMode === "compare" && isColumnOriented(source)) {
+        if (isColumnOriented(source)) {
           source = columnOrientedToRows(source as Record<string, unknown[]>);
         }
         const flatData = flattenForSpreadsheet(source);
         const columns = extractColumns(flatData);
         return { ...t, viewMode: "spreadsheet", data: flatData, columns };
       } else if (mode === "tree" && t.viewMode !== "tree") {
-        if (t.viewMode === "spreadsheet") {
-          // If data is flat (like CSV), use column-oriented format for tree
-          if (isFlatArray(t.data)) {
-            const rawData = rowsToColumnOriented(t.data as Record<string, unknown>[]);
-            return { ...t, viewMode: "tree", rawData };
-          }
-          const nested = t.data.map((row) => unflattenObject(row));
-          const rawData = nested.length === 1 ? nested[0] : nested;
-          return { ...t, viewMode: "tree", rawData };
-        }
+        // Just switch view mode; rawData is already correct
         return { ...t, viewMode: "tree" };
       } else if (mode === "compare") {
-        let rawData = t.rawData;
-        if (t.viewMode === "spreadsheet") {
-          if (isFlatArray(t.data)) {
-            rawData = rowsToColumnOriented(t.data as Record<string, unknown>[]);
-          } else {
-            const nested = t.data.map((row) => unflattenObject(row));
-            rawData = nested.length === 1 ? nested[0] : nested;
-            if (isFlatArray(rawData)) {
-              rawData = rowsToColumnOriented(rawData as Record<string, unknown>[]);
-            }
-          }
-        } else if (isFlatArray(rawData)) {
-          rawData = rowsToColumnOriented(rawData as Record<string, unknown>[]);
-        }
-        return { ...t, viewMode: "compare", rawData };
+        // Just switch view mode; rawData is already correct
+        return { ...t, viewMode: "compare" };
       }
       return t;
     }));
