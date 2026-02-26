@@ -367,7 +367,19 @@ const JsonEditor: React.FC = () => {
   }, []);
 
   const updateTabData = useCallback((tabId: string, data: Record<string, unknown>[]) => {
-    setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, data } : t)));
+    setTabs((prev) => prev.map((t) => {
+      if (t.id !== tabId) return t;
+      // Sync edits back to rawData
+      let rawData: unknown;
+      if (isColumnOriented(t.rawData)) {
+        // CSV-like data: keep column-oriented format
+        rawData = rowsToColumnOriented(data);
+      } else {
+        const nested = data.map((row) => unflattenObject(row));
+        rawData = nested.length === 1 ? nested[0] : nested;
+      }
+      return { ...t, data, rawData };
+    }));
   }, []);
 
   const updateTabRawData = useCallback((tabId: string, rawData: unknown) => {
