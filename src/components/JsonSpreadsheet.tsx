@@ -102,9 +102,9 @@ const JsonSpreadsheet: React.FC<JsonSpreadsheetProps> = ({
 
   const getCellTypeColor = (val: unknown): string => {
     if (val === null) return "text-muted-foreground italic";
-    if (typeof val === "number") return "text-blue-400";
-    if (typeof val === "boolean") return "text-amber-400";
-    if (typeof val === "object") return "text-purple-400";
+    if (typeof val === "number") return "text-blue-600 dark:text-blue-400";
+    if (typeof val === "boolean") return "text-amber-600 dark:text-amber-400";
+    if (typeof val === "object") return "text-purple-600 dark:text-purple-400";
     return "text-foreground";
   };
 
