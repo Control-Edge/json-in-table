@@ -37,6 +37,10 @@ interface DragState {
   startY: number;
   startValue: number;
 }
+// Recharts interprets dots in dataKey as nested property access.
+// Sanitize keys to avoid this, and provide mappings back to original names.
+const sanitizeKey = (key: string) => key.replace(/\./g, "__DOT__");
+const unsanitizeKey = (key: string) => key.replace(/__DOT__/g, ".");
 
 const FieldsChart: React.FC<FieldsChartProps> = ({ rows, columns, onClose, onValueChange }) => {
   const [xAxisCol, setXAxisCol] = useState<string | null>(null);
@@ -53,6 +57,10 @@ const FieldsChart: React.FC<FieldsChartProps> = ({ rows, columns, onClose, onVal
         return v !== null && v !== undefined && v !== "" && !isNaN(Number(v));
       })
     );
+
+  // Sanitized versions for recharts dataKey usage
+  const safeNumericColumns = numericColumns.map(sanitizeKey);
+  const safeXAxisCol = xAxisCol ? sanitizeKey(xAxisCol) : null;
 
   // Compute Y domain
   let yMin = Infinity;
@@ -72,20 +80,21 @@ const FieldsChart: React.FC<FieldsChartProps> = ({ rows, columns, onClose, onVal
   const yDomainMin = yMin - yRange * 0.1;
   const yDomainMax = yMax + yRange * 0.1;
 
-  const xKey = xAxisCol || "__row__";
+  const xKey = safeXAxisCol || "__row__";
   const chartData: Record<string, unknown>[] = rows.map((row, i) => {
     const point: Record<string, unknown> = { __row__: i + 1, __dataRowIndex__: i };
     if (xAxisCol) {
+      const safeX = sanitizeKey(xAxisCol);
       const xv = row[xAxisCol];
       if (xv !== null && xv !== undefined && xv !== "" && !isNaN(Number(xv))) {
-        point[xAxisCol] = Number(xv);
+        point[safeX] = Number(xv);
       } else {
-        point[xAxisCol] = xv !== null && xv !== undefined ? String(xv) : "";
+        point[safeX] = xv !== null && xv !== undefined ? String(xv) : "";
       }
     }
     numericColumns.forEach((col) => {
       const v = row[col];
-      point[col] = v !== null && v !== undefined && v !== "" && !isNaN(Number(v)) ? Number(v) : null;
+      point[sanitizeKey(col)] = v !== null && v !== undefined && v !== "" && !isNaN(Number(v)) ? Number(v) : null;
     });
     return point;
   });
@@ -129,7 +138,7 @@ const FieldsChart: React.FC<FieldsChartProps> = ({ rows, columns, onClose, onVal
         const rounded = Math.round(newValue * 100) / 100;
         const rowIndex = chartData[dragState.dataIndex]?.__dataRowIndex__ as number;
         if (rowIndex !== undefined) {
-          onValueChange(rowIndex, dragState.column, rounded);
+          onValueChange(rowIndex, unsanitizeKey(dragState.column), rounded);
         }
       }
       setDragState(null);
@@ -220,7 +229,7 @@ const FieldsChart: React.FC<FieldsChartProps> = ({ rows, columns, onClose, onVal
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--grid-line))" />
           <XAxis
             dataKey={xKey}
-            type={xAxisCol && chartData.every((d) => typeof d[xAxisCol] === "number") ? "number" : "category"}
+            type={safeXAxisCol && chartData.every((d) => typeof d[safeXAxisCol] === "number") ? "number" : "category"}
             label={{ value: xAxisCol || "Row", position: "insideBottomRight", offset: -5, style: { fontSize: 11, fill: "hsl(var(--muted-foreground))" } }}
             tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
             stroke="hsl(var(--border))"
@@ -238,8 +247,10 @@ const FieldsChart: React.FC<FieldsChartProps> = ({ rows, columns, onClose, onVal
               fontSize: 12,
               color: "hsl(var(--popover-foreground))",
             }}
+            formatter={(value: any, name: string) => [value, unsanitizeKey(name)]}
+            labelFormatter={(label) => typeof label === 'string' ? unsanitizeKey(label) : label}
           />
-          {numericColumns.length > 1 && (
+          {safeNumericColumns.length > 1 && (
             <Legend
               wrapperStyle={{ fontSize: 11 }}
               onClick={(e: any) => {
@@ -251,24 +262,28 @@ const FieldsChart: React.FC<FieldsChartProps> = ({ rows, columns, onClose, onVal
                   return next;
                 });
               }}
-              formatter={(value: string) => (
-                <span style={{ color: hiddenSeries.has(value) ? "hsl(var(--muted-foreground))" : undefined, textDecoration: hiddenSeries.has(value) ? "line-through" : undefined, cursor: "pointer" }}>
-                  {value}
-                </span>
-              )}
+              formatter={(value: string) => {
+                const display = unsanitizeKey(value);
+                return (
+                  <span style={{ color: hiddenSeries.has(value) ? "hsl(var(--muted-foreground))" : undefined, textDecoration: hiddenSeries.has(value) ? "line-through" : undefined, cursor: "pointer" }}>
+                    {display}
+                  </span>
+                );
+              }}
             />
           )}
-          {numericColumns.map((col, i) => (
+          {safeNumericColumns.map((safeCol, i) => (
             <Line
-              key={col}
+              key={safeCol}
               type="monotone"
-              dataKey={col}
+              dataKey={safeCol}
+              name={unsanitizeKey(safeCol)}
               stroke={COLORS[i % COLORS.length]}
               strokeWidth={2}
-              dot={hiddenSeries.has(col) ? false : makeDraggableDot(col, COLORS[i % COLORS.length])}
+              dot={hiddenSeries.has(safeCol) ? false : makeDraggableDot(safeCol, COLORS[i % COLORS.length])}
               activeDot={false}
               connectNulls
-              hide={hiddenSeries.has(col)}
+              hide={hiddenSeries.has(safeCol)}
             />
           ))}
         </LineChart>
