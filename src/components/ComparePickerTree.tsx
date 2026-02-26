@@ -43,7 +43,8 @@ const PickerNode: React.FC<{
   const isExpanded = expandedPaths.has(pathStr);
   const isArray = Array.isArray(value);
   const isSelected = selectedPaths.includes(pathStr);
-  const isLeaf = !isExpandable;
+  // Allow selecting any node except root
+  const isSelectable = depth > 0;
 
   const entries = isExpandable
     ? isArray
@@ -69,8 +70,8 @@ const PickerNode: React.FC<{
           ) : null}
         </span>
 
-        {/* Checkbox for leaf nodes */}
-        {isLeaf && (
+        {/* Checkbox for selectable nodes */}
+        {isSelectable && (
           <button
             onClick={() => onTogglePath(pathStr)}
             className={`w-4 h-4 rounded border mr-2 flex items-center justify-center shrink-0 transition-colors ${
