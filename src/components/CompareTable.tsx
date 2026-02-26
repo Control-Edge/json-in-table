@@ -166,7 +166,7 @@ const useTableData = (data: unknown, selectedPaths: string[]) => {
         } else colSet.add("value");
       });
       const columns = Array.from(colSet);
-      const shortLabel = (path: string) => path.split(".").pop() || path;
+      // Use full path for column titles
 
       const extraArrays = arrayPaths.slice(1).map((p) => ({
         path: p, data: getAtPath(data, p) as unknown[],
@@ -182,9 +182,9 @@ const useTableData = (data: unknown, selectedPaths: string[]) => {
       });
 
       const headers: string[] = [
-        ...columns.map((c) => `${shortLabel(primaryPath)}.${c}`),
-        ...extraArrays.flatMap(({ path }) => (extraColSets.get(path) || []).map((c) => `${shortLabel(path)}.${c}`)),
-        ...otherPaths.map((p) => shortLabel(p)),
+        ...columns.map((c) => `${primaryPath}.${c}`),
+        ...extraArrays.flatMap(({ path }) => (extraColSets.get(path) || []).map((c) => `${path}.${c}`)),
+        ...otherPaths,
       ];
 
       const maxRows = Math.max(primaryArray.length, ...extraArrays.map((e) => e.data.length));
@@ -211,8 +211,7 @@ const useTableData = (data: unknown, selectedPaths: string[]) => {
       const val = getAtPath(data, p);
       if (val !== null && typeof val === "object" && !Array.isArray(val)) {
         const flat = flattenObject(val);
-        const shortP = p.split(".").pop() || p;
-        for (const subKey of Object.keys(flat)) resolvedColumns.push({ header: `${shortP}.${subKey}`, fullPath: `${p}.${subKey}` });
+        for (const subKey of Object.keys(flat)) resolvedColumns.push({ header: `${p}.${subKey}`, fullPath: `${p}.${subKey}` });
       } else resolvedColumns.push({ header: p, fullPath: p });
     }
     return {
@@ -318,7 +317,7 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
       ...extraArrays.map((e) => e.data.length)
     );
 
-    const shortLabel = (path: string) => path.split(".").pop() || path;
+    // Full paths used for column titles
 
     return (
       <div className="flex flex-col h-full">
@@ -338,9 +337,8 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
               {columns.map((col) => (
                 <th key={`${primaryPath}.${col}`} className="grid-header-cell" style={{ minWidth: 140 }}>
                   <div className="flex items-center gap-1">
-                    <span className="truncate text-xs font-mono" title={`${shortLabel(primaryPath)}.${col}`}>
-                      <span className="text-muted-foreground/50">{shortLabel(primaryPath)}.</span>
-                      {col}
+                    <span className="truncate text-xs font-mono" title={`${primaryPath}.${col}`}>
+                      {`${primaryPath}.${col}`}
                     </span>
                   </div>
                 </th>
@@ -349,9 +347,8 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                 Array.from(extraColSets.get(path) || []).map((col) => (
                   <th key={`${path}.${col}`} className="grid-header-cell" style={{ minWidth: 140 }}>
                     <div className="flex items-center gap-1">
-                      <span className="truncate text-xs font-mono" title={`${shortLabel(path)}.${col}`}>
-                        <span className="text-muted-foreground/50">{shortLabel(path)}.</span>
-                        {col}
+                      <span className="truncate text-xs font-mono" title={`${path}.${col}`}>
+                        {`${path}.${col}`}
                       </span>
                     </div>
                   </th>
@@ -360,7 +357,7 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
               {otherPaths.map((p) => (
                 <th key={p} className="grid-header-cell" style={{ minWidth: 140 }}>
                   <div className="flex items-center gap-1">
-                    <span className="truncate text-xs font-mono" title={p}>{shortLabel(p)}</span>
+                    <span className="truncate text-xs font-mono" title={p}>{p}</span>
                     <button
                       onClick={() => onRemovePath(p)}
                       className="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors shrink-0"
