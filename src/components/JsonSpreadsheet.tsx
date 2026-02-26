@@ -260,7 +260,7 @@ const JsonSpreadsheet: React.FC<JsonSpreadsheetProps> = ({
                   return (
                     <td
                       key={colIndex}
-                      className={`grid-cell ${isEditing ? "grid-cell-editing" : ""} ${selected && !isEditing ? "!bg-primary/8" : ""} ${getCellTypeColor(row[col])}`}
+                      className={`grid-cell ${isEditing ? "grid-cell-editing" : ""} ${selected && !isEditing ? "!bg-primary/20 ring-1 ring-inset ring-primary/40" : ""} ${getCellTypeColor(row[col])}`}
                       onMouseDown={(e) => {
                         if (!isEditing) handleCellMouseDown(rowIndex, colIndex, e);
                       }}
