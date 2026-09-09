@@ -14,7 +14,12 @@
     "test:watch": "vitest",
     "electron:dev": "concurrently -k -s first -n VITE,ELECTRON -c blue,green \"vite\" \"wait-on tcp:8080 && electron .\"",
     "electron:preview": "vite build && electron .",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "vite build && electron-builder",
+    "electron:release": "vite build && electron-builder --publish always"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Control-Edge/json-in-table.git"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -103,6 +108,11 @@
     ],
     "directories": {
       "output": "release"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Control-Edge",
+      "repo": "json-in-table"
     }
   }
 }
