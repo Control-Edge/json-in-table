@@ -1,5 +1,14 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { X, Download, FileJson, FileSpreadsheet } from "lucide-react";
+import { X, FileJson, FileSpreadsheet, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, SlidersHorizontal, EyeOff } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "./ui/dropdown-menu";
 
 interface CompareTableProps {
   data: unknown;
@@ -236,6 +245,66 @@ const escapeCsv = (val: string) => {
   return val;
 };
 
+type SortDir = "asc" | "desc";
+
+const compareValues = (a: unknown, b: unknown): number => {
+  const aNull = a === null || a === undefined;
+  const bNull = b === null || b === undefined;
+  if (aNull && bNull) return 0;
+  if (aNull) return 1;
+  if (bNull) return -1;
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  if (typeof a === "boolean" && typeof b === "boolean") return Number(a) - Number(b);
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+};
+
+interface ColumnDef {
+  key: string;
+  label: string;
+  group?: string;
+  getValue: (rowIndex: number) => unknown;
+  getEditPath?: (rowIndex: number) => string;
+}
+
+const SortIcon: React.FC<{ dir: SortDir | null }> = ({ dir }) => {
+  if (dir === "asc") return <ArrowUp size={12} />;
+  if (dir === "desc") return <ArrowDown size={12} />;
+  return <ArrowUpDown size={12} className="opacity-30 group-hover/th:opacity-70" />;
+};
+
+/** JSON export split button: default click exports array-of-objects, dropdown offers the object-of-columns alternative */
+const JsonExportButton: React.FC<{ onExportArray: () => void; onExportObject: () => void }> = ({ onExportArray, onExportObject }) => (
+  <div className="flex items-center rounded overflow-hidden">
+    <button
+      onClick={onExportArray}
+      className="flex items-center gap-1 pl-2 pr-1.5 py-1 text-xs text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors"
+      title="Export as array of objects"
+    >
+      <FileJson size={13} /> JSON
+    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="flex items-center px-1 py-1 text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors"
+          title="More JSON export options"
+        >
+          <ChevronDown size={12} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel className="text-xs">Export shape</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onExportArray} className="text-xs">
+          Array of objects <span className="text-muted-foreground/60 ml-1">(recommended)</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onExportObject} className="text-xs">
+          Single object of columns
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+);
+
 const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemovePath, onDataChange }) => {
   const handleCellEdit = useCallback((fullPath: string, newValue: unknown) => {
     onDataChange(setAtPath(data, fullPath, newValue));
@@ -243,18 +312,48 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
 
   const tableData = useTableData(data, selectedPaths);
 
+  const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(null);
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+
+  const toggleColumnVisibility = useCallback((key: string) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const handleSort = useCallback((key: string) => {
+    setSort((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" };
+      if (prev.dir === "asc") return { key, dir: "desc" };
+      return null;
+    });
+  }, []);
+
   const exportCsv = useCallback(() => {
     const { headers, rows } = tableData;
     const lines = [headers.map(escapeCsv).join(","), ...rows.map((r) => r.map(escapeCsv).join(","))];
     downloadFile(lines.join("\n"), "fields-export.csv", "text/csv");
   }, [tableData]);
 
-  const exportJson = useCallback(() => {
+  const exportJsonAsArray = useCallback(() => {
+    const { headers, rows } = tableData;
+    const jsonData = rows.map((row) => {
+      const obj: Record<string, unknown> = {};
+      headers.forEach((h, i) => { obj[h] = row[i] === "—" ? null : parseInput(row[i]); });
+      return obj;
+    });
+    downloadFile(JSON.stringify(jsonData, null, 2), "fields-export.json", "application/json");
+  }, [tableData]);
+
+  const exportJsonAsObject = useCallback(() => {
     const { headers, rows } = tableData;
     const jsonData: Record<string, unknown[]> = {};
     headers.forEach((h) => { jsonData[h] = []; });
     rows.forEach((row) => {
-      headers.forEach((h, i) => { jsonData[h].push(parseInput(row[i] === "—" ? "" : row[i])); });
+      headers.forEach((h, i) => { jsonData[h].push(row[i] === "—" ? null : parseInput(row[i])); });
     });
     downloadFile(JSON.stringify(jsonData, null, 2), "fields-export.json", "application/json");
   }, [tableData]);
@@ -317,53 +416,117 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
       ...extraArrays.map((e) => e.data.length)
     );
 
-    // Full paths used for column titles
+    // Unified column model across the primary array, extra arrays, and scalar paths
+    const allColumns: ColumnDef[] = [
+      ...columns.map((col) => ({
+        key: `${primaryPath}.${col}`,
+        label: `${primaryPath}.${col}`,
+        group: primaryPath,
+        getValue: (rowIndex: number) => {
+          const item = primaryArray[rowIndex];
+          const flat = item !== null && typeof item === "object" ? flattenObject(item) : item !== undefined ? { value: item } : {};
+          return (flat as Record<string, unknown>)[col];
+        },
+        getEditPath: (rowIndex: number) => `${primaryPath}.${rowIndex}.${col}`,
+      })),
+      ...extraArrays.flatMap(({ path, data: arr }) =>
+        Array.from(extraColSets.get(path) || []).map((col) => ({
+          key: `${path}.${col}`,
+          label: `${path}.${col}`,
+          group: path,
+          getValue: (rowIndex: number) => {
+            const item = arr[rowIndex];
+            const flat = item !== null && typeof item === "object" ? flattenObject(item) : item !== undefined ? { value: item } : {};
+            return (flat as Record<string, unknown>)[col];
+          },
+          getEditPath: (rowIndex: number) => `${path}.${rowIndex}.${col}`,
+        }))
+      ),
+      ...otherPaths.map((p) => ({
+        key: p,
+        label: p,
+        getValue: () => getAtPath(data, p),
+        getEditPath: () => p,
+      })),
+    ];
+
+    const visibleColumns = allColumns.filter((c) => !hiddenColumns.has(c.key));
+
+    const rowOrder = Array.from({ length: maxRows }, (_, i) => i);
+    if (sort) {
+      const sortCol = allColumns.find((c) => c.key === sort.key);
+      if (sortCol) {
+        rowOrder.sort((a, b) => {
+          const cmp = compareValues(sortCol.getValue(a), sortCol.getValue(b));
+          return sort.dir === "asc" ? cmp : -cmp;
+        });
+      }
+    }
+
+    const groupVisibleCount = (group: string) => visibleColumns.filter((c) => c.group === group).length;
+    const otherVisibleCount = visibleColumns.filter((c) => !c.group).length;
 
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border bg-card shrink-0 justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
+                <SlidersHorizontal size={13} /> Columns{hiddenColumns.size > 0 ? ` (${hiddenColumns.size} hidden)` : ""}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-80 overflow-auto">
+              <DropdownMenuLabel className="text-xs">Show / hide columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {allColumns.map((c) => (
+                <DropdownMenuCheckboxItem
+                  key={c.key}
+                  checked={!hiddenColumns.has(c.key)}
+                  onCheckedChange={() => toggleColumnVisibility(c.key)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs font-mono"
+                >
+                  {c.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button onClick={exportCsv} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
             <FileSpreadsheet size={13} /> CSV
           </button>
-          <button onClick={exportJson} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
-            <FileJson size={13} /> JSON
-          </button>
+          <JsonExportButton onExportArray={exportJsonAsArray} onExportObject={exportJsonAsObject} />
         </div>
         <div className="overflow-auto flex-1">
         <table className="border-collapse w-full select-none">
           <thead className="sticky top-0 z-20">
             <tr>
               <th className="grid-header-cell sticky left-0 z-30 w-12">#</th>
-              {columns.map((col) => (
-                <th key={`${primaryPath}.${col}`} className="grid-header-cell" style={{ minWidth: 140 }}>
+              {visibleColumns.map((c) => (
+                <th key={c.key} className="grid-header-cell group/th" style={{ minWidth: 140 }}>
                   <div className="flex items-center gap-1">
-                    <span className="truncate text-xs font-mono" title={`${primaryPath}.${col}`}>
-                      {`${primaryPath}.${col}`}
-                    </span>
-                  </div>
-                </th>
-              ))}
-              {extraArrays.map(({ path }) =>
-                Array.from(extraColSets.get(path) || []).map((col) => (
-                  <th key={`${path}.${col}`} className="grid-header-cell" style={{ minWidth: 140 }}>
-                    <div className="flex items-center gap-1">
-                      <span className="truncate text-xs font-mono" title={`${path}.${col}`}>
-                        {`${path}.${col}`}
-                      </span>
-                    </div>
-                  </th>
-                ))
-              )}
-              {otherPaths.map((p) => (
-                <th key={p} className="grid-header-cell" style={{ minWidth: 140 }}>
-                  <div className="flex items-center gap-1">
-                    <span className="truncate text-xs font-mono" title={p}>{p}</span>
                     <button
-                      onClick={() => onRemovePath(p)}
-                      className="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      className="flex items-center gap-1 min-w-0 flex-1 text-left"
+                      onClick={() => handleSort(c.key)}
+                      title={`Sort by ${c.label}`}
                     >
-                      <X size={12} />
+                      <span className="truncate text-xs font-mono" title={c.label}>{c.label}</span>
+                      <SortIcon dir={sort?.key === c.key ? sort.dir : null} />
                     </button>
+                    <button
+                      onClick={() => toggleColumnVisibility(c.key)}
+                      className="p-0.5 rounded hover:bg-secondary text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
+                      title="Hide column"
+                    >
+                      <EyeOff size={12} />
+                    </button>
+                    {!c.group && (
+                      <button
+                        onClick={() => onRemovePath(c.key)}
+                        className="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
                   </div>
                 </th>
               ))}
@@ -371,9 +534,8 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
             <tr>
               <th className="grid-header-cell sticky left-0 z-30 w-12" />
               {arrayPaths.map((p) => {
-                const colCount = p === primaryPath
-                  ? columns.length
-                  : Array.from(extraColSets.get(p) || []).length;
+                const colCount = groupVisibleCount(p);
+                if (colCount === 0) return null;
                 return (
                   <th key={p} colSpan={colCount} className="grid-header-cell !py-1">
                     <div className="flex items-center gap-1 justify-center">
@@ -388,54 +550,23 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                   </th>
                 );
               })}
-              {otherPaths.length > 0 && <th colSpan={otherPaths.length} className="grid-header-cell !py-1" />}
+              {otherVisibleCount > 0 && <th colSpan={otherVisibleCount} className="grid-header-cell !py-1" />}
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: maxRows }).map((_, rowIndex) => {
-              const primaryItem = primaryArray[rowIndex];
-              const primaryFlat = primaryItem !== null && typeof primaryItem === "object"
-                ? flattenObject(primaryItem)
-                : primaryItem !== undefined ? { value: primaryItem } : {};
-
-              return (
-                <tr key={rowIndex} className="group">
-                  <td className="row-number sticky left-0 z-10">{rowIndex}</td>
-                  {columns.map((col) => {
-                    const val = (primaryFlat as Record<string, unknown>)[col];
-                    const fullPath = `${primaryPath}.${rowIndex}.${col}`;
-                    return (
-                      <td key={`${primaryPath}.${col}`} className="grid-cell">
-                        <EditableCell value={val} onCommit={(v) => handleCellEdit(fullPath, v)} />
-                      </td>
-                    );
-                  })}
-                  {extraArrays.map(({ path, data: arr }) => {
-                    const item = arr[rowIndex];
-                    const flat = item !== null && typeof item === "object"
-                      ? flattenObject(item)
-                      : item !== undefined ? { value: item } : {};
-                    return Array.from(extraColSets.get(path) || []).map((col) => {
-                      const val = (flat as Record<string, unknown>)[col];
-                      const fullPath = `${path}.${rowIndex}.${col}`;
-                      return (
-                        <td key={`${path}.${col}`} className="grid-cell">
-                          <EditableCell value={val} onCommit={(v) => handleCellEdit(fullPath, v)} />
-                        </td>
-                      );
-                    });
-                  })}
-                  {otherPaths.map((p) => {
-                    const val = getAtPath(data, p);
-                    return (
-                      <td key={p} className="grid-cell">
-                        <EditableCell value={val} onCommit={(v) => handleCellEdit(p, v)} />
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+            {rowOrder.map((rowIndex) => (
+              <tr key={rowIndex} className="group">
+                <td className="row-number sticky left-0 z-10">{rowIndex}</td>
+                {visibleColumns.map((c) => {
+                  const val = c.getValue(rowIndex);
+                  return (
+                    <td key={c.key} className="grid-cell">
+                      <EditableCell value={val} onCommit={(v) => handleCellEdit(c.getEditPath!(rowIndex), v)} />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
         </div>
@@ -473,9 +604,7 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
         <button onClick={exportCsv} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
           <FileSpreadsheet size={13} /> CSV
         </button>
-        <button onClick={exportJson} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
-          <FileJson size={13} /> JSON
-        </button>
+        <JsonExportButton onExportArray={exportJsonAsArray} onExportObject={exportJsonAsObject} />
       </div>
       <div className="overflow-auto flex-1">
         <table className="border-collapse w-full select-none" style={{ minWidth: resolvedColumns.length * 160 + 60 }}>
