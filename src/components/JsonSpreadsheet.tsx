@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { Trash2, Plus, BarChart3 } from "lucide-react";
+import { Trash2, Plus, BarChart3, FileSpreadsheet } from "lucide-react";
 import SpreadsheetChart from "./SpreadsheetChart";
+import JsonExportButton from "./JsonExportButton";
+import { downloadFile, escapeCsv } from "@/lib/exportFile";
 
 interface JsonSpreadsheetProps {
   data: Record<string, unknown>[];
@@ -178,6 +180,29 @@ const JsonSpreadsheet: React.FC<JsonSpreadsheetProps> = ({
     return "text-foreground";
   };
 
+  const exportCsv = useCallback(() => {
+    const lines = [
+      columns.map(escapeCsv).join(","),
+      ...data.map((row) => columns.map((col) => escapeCsv(formatCellValue(row[col]))).join(",")),
+    ];
+    downloadFile(lines.join("\n"), "table-export.csv", "text/csv");
+  }, [columns, data]);
+
+  const exportJsonAsArray = useCallback(() => {
+    const jsonData = data.map((row) => {
+      const obj: Record<string, unknown> = {};
+      columns.forEach((col) => { obj[col] = row[col] ?? null; });
+      return obj;
+    });
+    downloadFile(JSON.stringify(jsonData, null, 2), "table-export.json", "application/json");
+  }, [columns, data]);
+
+  const exportJsonAsObject = useCallback(() => {
+    const jsonData: Record<string, unknown[]> = {};
+    columns.forEach((col) => { jsonData[col] = data.map((row) => row[col] ?? null); });
+    downloadFile(JSON.stringify(jsonData, null, 2), "table-export.json", "application/json");
+  }, [columns, data]);
+
   if (data.length === 0 && columns.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
@@ -188,7 +213,15 @@ const JsonSpreadsheet: React.FC<JsonSpreadsheetProps> = ({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Toolbar */}
+      {/* Export toolbar */}
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b bg-card shrink-0 justify-end" style={{ borderColor: "hsl(var(--grid-line))" }}>
+        <button onClick={exportCsv} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
+          <FileSpreadsheet size={13} /> CSV
+        </button>
+        <JsonExportButton onExportArray={exportJsonAsArray} onExportObject={exportJsonAsObject} />
+      </div>
+
+      {/* Selection toolbar */}
       {hasSelection && (
         <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-card shrink-0" style={{ borderColor: "hsl(var(--grid-line))" }}>
           <span className="text-xs text-muted-foreground">

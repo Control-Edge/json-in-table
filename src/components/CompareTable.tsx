@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { X, FileJson, FileSpreadsheet, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, SlidersHorizontal, EyeOff } from "lucide-react";
+import { X, FileSpreadsheet, ArrowUp, ArrowDown, ArrowUpDown, SlidersHorizontal, EyeOff } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "./ui/dropdown-menu";
+import JsonExportButton from "./JsonExportButton";
+import { downloadFile, escapeCsv } from "@/lib/exportFile";
 
 interface CompareTableProps {
   data: unknown;
@@ -230,21 +231,6 @@ const useTableData = (data: unknown, selectedPaths: string[]) => {
   }, [data, selectedPaths]);
 };
 
-const downloadFile = (content: string, filename: string, mime: string) => {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
-const escapeCsv = (val: string) => {
-  if (val.includes(",") || val.includes('"') || val.includes("\n")) return `"${val.replace(/"/g, '""')}"`;
-  return val;
-};
-
 type SortDir = "asc" | "desc";
 
 const compareValues = (a: unknown, b: unknown): number => {
@@ -271,39 +257,6 @@ const SortIcon: React.FC<{ dir: SortDir | null }> = ({ dir }) => {
   if (dir === "desc") return <ArrowDown size={12} />;
   return <ArrowUpDown size={12} className="opacity-30 group-hover/th:opacity-70" />;
 };
-
-/** JSON export split button: default click exports array-of-objects, dropdown offers the object-of-columns alternative */
-const JsonExportButton: React.FC<{ onExportArray: () => void; onExportObject: () => void }> = ({ onExportArray, onExportObject }) => (
-  <div className="flex items-center rounded overflow-hidden">
-    <button
-      onClick={onExportArray}
-      className="flex items-center gap-1 pl-2 pr-1.5 py-1 text-xs text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors"
-      title="Export as array of objects"
-    >
-      <FileJson size={13} /> JSON
-    </button>
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="flex items-center px-1 py-1 text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors"
-          title="More JSON export options"
-        >
-          <ChevronDown size={12} />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuLabel className="text-xs">Export shape</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onExportArray} className="text-xs">
-          Array of objects <span className="text-muted-foreground/60 ml-1">(recommended)</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onExportObject} className="text-xs">
-          Single object of columns
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  </div>
-);
 
 const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemovePath, onDataChange }) => {
   const handleCellEdit = useCallback((fullPath: string, newValue: unknown) => {
