@@ -616,6 +616,7 @@ const JsonEditor: React.FC = () => {
         <a href="https://cedge.se" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
           Control Edge AB
         </a>
+        <span className="text-muted-foreground/50">v{__APP_VERSION__}</span>
       </footer>
     </div>
   );
