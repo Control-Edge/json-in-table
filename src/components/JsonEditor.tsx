@@ -169,43 +169,54 @@ const detectDelimiter = (text: string): string => {
   return tabCount > commaCount ? "\t" : ",";
 };
 
-const parseCsv = (text: string): { rows: Record<string, unknown>[]; columns: string[] } => {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) throw new Error("Data must have a header row and at least one data row");
-  
-  const delimiter = detectDelimiter(text);
+/**
+ * Tokenize CSV/TSV text into rows of raw field strings, honoring RFC-4180 quoting.
+ * Crucially, this scans the whole text as one stream instead of pre-splitting on
+ * newlines, so a quoted field containing embedded newlines (e.g. multi-line
+ * descriptions) is kept together instead of being torn into bogus extra rows.
+ */
+const tokenizeDelimited = (text: string, delimiter: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  let sawAnyField = false;
 
-  const parseLine = (line: string): string[] => {
-    if (delimiter === "\t") return line.split("\t").map((s) => s.trim());
-    const result: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (inQuotes) {
-        if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-        else if (ch === '"') inQuotes = false;
-        else current += ch;
+  const endField = () => { row.push(field.trim()); field = ""; };
+  const endRow = () => { endField(); rows.push(row); row = []; sawAnyField = false; };
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
       } else {
-        if (ch === '"') inQuotes = true;
-        else if (ch === ",") { result.push(current.trim()); current = ""; }
-        else current += ch;
+        field += ch;
       }
+      continue;
     }
-    result.push(current.trim());
-    return result;
-  };
+    if (ch === '"' && field === "") { inQuotes = true; sawAnyField = true; continue; }
+    if (ch === delimiter) { endField(); sawAnyField = true; continue; }
+    if (ch === "\r") continue;
+    if (ch === "\n") {
+      if (sawAnyField || field !== "") endRow();
+      continue;
+    }
+    field += ch;
+    sawAnyField = true;
+  }
+  if (sawAnyField || field !== "") endRow();
+  return rows;
+};
 
-  const rawHeaders = parseLine(lines[0]);
+const parseCsv = (text: string): { rows: Record<string, unknown>[]; columns: string[] } => {
+  const delimiter = detectDelimiter(text);
+  const allRows = tokenizeDelimited(text.trim(), delimiter);
+  if (allRows.length < 2) throw new Error("Data must have a header row and at least one data row");
+
+  const rawHeaders = allRows[0];
   // Deduplicate headers by appending index
-  const headerCount: Record<string, number> = {};
-  const headers = rawHeaders.map((h) => {
-    const name = h || "column";
-    headerCount[name] = (headerCount[name] || 0) + 1;
-    if (headerCount[name] > 1) return `${name}_${headerCount[name]}`;
-    return name;
-  });
-  // Check if any were duped, and if so re-number from 1
   const finalHeaders = rawHeaders.map((h, i) => {
     const name = h || "column";
     const total = rawHeaders.filter((r) => r === name).length;
@@ -214,8 +225,7 @@ const parseCsv = (text: string): { rows: Record<string, unknown>[]; columns: str
     return `${name}_${idx}`;
   });
 
-  const rows = lines.slice(1).filter((l) => l.trim()).map((line) => {
-    const values = parseLine(line);
+  const rows = allRows.slice(1).map((values) => {
     const obj: Record<string, unknown> = {};
     finalHeaders.forEach((h, i) => {
       const v = values[i] ?? "";
