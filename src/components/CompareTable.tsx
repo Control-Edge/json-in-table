@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { X, FileSpreadsheet, ArrowUp, ArrowDown, ArrowUpDown, SlidersHorizontal, EyeOff } from "lucide-react";
 import {
   DropdownMenu,
@@ -102,6 +103,10 @@ const parseInput = (text: string): unknown => {
   if (!isNaN(Number(text)) && text.trim() !== "") return Number(text);
   return text;
 };
+
+/** Cell display strings use "—" for missing/undefined and "null" for null; CSV has no such
+ * sentinel, so both should become an empty cell rather than exporting the placeholder text. */
+const csvCellValue = (display: string): string => (display === "—" || display === "null" ? "" : display);
 
 /** Inline editable cell */
 const EditableCell: React.FC<{
@@ -252,6 +257,30 @@ interface ColumnDef {
   getEditPath?: (rowIndex: number) => string;
 }
 
+const ROW_HEIGHT = 36;
+const COLUMN_WIDTH = 160;
+const ROW_NUM_WIDTH = 48;
+
+const CompareRow: React.FC<{
+  rowIndex: number;
+  columns: ColumnDef[];
+  onCellEdit: (fullPath: string, value: unknown) => void;
+}> = React.memo(({ rowIndex, columns, onCellEdit }) => {
+  return (
+    <div className="flex group" role="row" style={{ height: ROW_HEIGHT }}>
+      <div className="row-number sticky left-0 z-10 flex items-center justify-end" style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}>
+        {rowIndex}
+      </div>
+      {columns.map((c) => (
+        <div key={c.key} role="cell" className="grid-cell flex items-center" style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH }}>
+          <EditableCell value={c.getValue(rowIndex)} onCommit={(v) => onCellEdit(c.getEditPath!(rowIndex), v)} />
+        </div>
+      ))}
+    </div>
+  );
+});
+CompareRow.displayName = "CompareRow";
+
 const SortIcon: React.FC<{ dir: SortDir | null }> = ({ dir }) => {
   if (dir === "asc") return <ArrowUp size={12} />;
   if (dir === "desc") return <ArrowDown size={12} />;
@@ -287,7 +316,10 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
 
   const exportCsv = useCallback(() => {
     const { headers, rows } = tableData;
-    const lines = [headers.map(escapeCsv).join(","), ...rows.map((r) => r.map(escapeCsv).join(","))];
+    const lines = [
+      headers.map(escapeCsv).join(","),
+      ...rows.map((r) => r.map((v) => escapeCsv(csvCellValue(v))).join(",")),
+    ];
     downloadFile(lines.join("\n"), "fields-export.csv", "text/csv");
   }, [tableData]);
 
@@ -310,6 +342,22 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
     });
     downloadFile(JSON.stringify(jsonData, null, 2), "fields-export.json", "application/json");
   }, [tableData]);
+
+  // Row count for the virtualizer — must be computed unconditionally since hooks
+  // can't be called from inside the array-mode branch below.
+  const maxRows = useMemo(() => {
+    const arrayPaths = selectedPaths.filter((p) => Array.isArray(getAtPath(data, p)));
+    if (arrayPaths.length === 0) return 0;
+    return Math.max(...arrayPaths.map((p) => (getAtPath(data, p) as unknown[]).length));
+  }, [data, selectedPaths]);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: maxRows,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 8,
+  });
 
   if (selectedPaths.length === 0) {
     return (
@@ -364,11 +412,6 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
       extraColSets.set(path, cs);
     });
 
-    const maxRows = Math.max(
-      primaryArray.length,
-      ...extraArrays.map((e) => e.data.length)
-    );
-
     // Unified column model across the primary array, extra arrays, and scalar paths
     const allColumns: ColumnDef[] = [
       ...columns.map((col) => ({
@@ -418,6 +461,10 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
 
     const groupVisibleCount = (group: string) => visibleColumns.filter((c) => c.group === group).length;
     const otherVisibleCount = visibleColumns.filter((c) => !c.group).length;
+    const totalWidth = ROW_NUM_WIDTH + visibleColumns.length * COLUMN_WIDTH;
+    const HEADER1_HEIGHT = 34;
+    const HEADER2_HEIGHT = 26;
+    const virtualItems = rowVirtualizer.getVirtualItems();
 
     return (
       <div className="flex flex-col h-full">
@@ -449,14 +496,16 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
           </button>
           <JsonExportButton onExportArray={exportJsonAsArray} onExportObject={exportJsonAsObject} />
         </div>
-        <div className="overflow-auto flex-1">
-        <table className="border-collapse w-full select-none">
-          <thead className="sticky top-0 z-20">
-            <tr>
-              <th className="grid-header-cell sticky left-0 z-30 w-12">#</th>
+        <div className="overflow-auto flex-1 relative" ref={scrollRef}>
+          <div style={{ width: totalWidth, minWidth: totalWidth }} role="table">
+            {/* Header row 1: column labels */}
+            <div className="flex sticky z-20" style={{ top: 0 }} role="row">
+              <div className="grid-header-cell sticky left-0 z-30 flex items-center justify-end" style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH, height: HEADER1_HEIGHT }}>
+                #
+              </div>
               {visibleColumns.map((c) => (
-                <th key={c.key} className="grid-header-cell group/th" style={{ minWidth: 140 }}>
-                  <div className="flex items-center gap-1">
+                <div key={c.key} role="columnheader" className="grid-header-cell group/th flex items-center" style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH, height: HEADER1_HEIGHT }}>
+                  <div className="flex items-center gap-1 w-full">
                     <button
                       className="flex items-center gap-1 min-w-0 flex-1 text-left"
                       onClick={() => handleSort(c.key)}
@@ -481,16 +530,17 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                       </button>
                     )}
                   </div>
-                </th>
+                </div>
               ))}
-            </tr>
-            <tr>
-              <th className="grid-header-cell sticky left-0 z-30 w-12" />
+            </div>
+            {/* Header row 2: group labels */}
+            <div className="flex sticky z-20" style={{ top: HEADER1_HEIGHT }} role="row">
+              <div className="grid-header-cell sticky left-0 z-30" style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH, height: HEADER2_HEIGHT }} />
               {arrayPaths.map((p) => {
                 const colCount = groupVisibleCount(p);
                 if (colCount === 0) return null;
                 return (
-                  <th key={p} colSpan={colCount} className="grid-header-cell !py-1">
+                  <div key={p} className="grid-header-cell !py-1 flex items-center justify-center" style={{ width: colCount * COLUMN_WIDTH, minWidth: colCount * COLUMN_WIDTH, height: HEADER2_HEIGHT }}>
                     <div className="flex items-center gap-1 justify-center">
                       <span className="text-[10px] text-muted-foreground/60 font-mono">{p}</span>
                       <button
@@ -500,28 +550,35 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
                         <X size={10} />
                       </button>
                     </div>
-                  </th>
+                  </div>
                 );
               })}
-              {otherVisibleCount > 0 && <th colSpan={otherVisibleCount} className="grid-header-cell !py-1" />}
-            </tr>
-          </thead>
-          <tbody>
-            {rowOrder.map((rowIndex) => (
-              <tr key={rowIndex} className="group">
-                <td className="row-number sticky left-0 z-10">{rowIndex}</td>
-                {visibleColumns.map((c) => {
-                  const val = c.getValue(rowIndex);
-                  return (
-                    <td key={c.key} className="grid-cell">
-                      <EditableCell value={val} onCommit={(v) => handleCellEdit(c.getEditPath!(rowIndex), v)} />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              {otherVisibleCount > 0 && (
+                <div className="grid-header-cell !py-1" style={{ width: otherVisibleCount * COLUMN_WIDTH, minWidth: otherVisibleCount * COLUMN_WIDTH, height: HEADER2_HEIGHT }} />
+              )}
+            </div>
+
+            {/* Virtualized body */}
+            <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }} role="rowgroup">
+              {virtualItems.map((virtualRow) => {
+                const rowIndex = rowOrder[virtualRow.index];
+                return (
+                  <div
+                    key={virtualRow.key}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <CompareRow rowIndex={rowIndex} columns={visibleColumns} onCellEdit={handleCellEdit} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     );
