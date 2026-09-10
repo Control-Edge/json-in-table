@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Trash2, Plus, BarChart3, FileSpreadsheet } from "lucide-react";
+import { Trash2, Plus, BarChart3, FileSpreadsheet, CodeXml } from "lucide-react";
 import SpreadsheetChart from "./SpreadsheetChart";
 import JsonExportButton from "./JsonExportButton";
 import { downloadFile, escapeCsv } from "@/lib/exportFile";
+import { rowsToXml } from "@/lib/xml";
 
 interface JsonSpreadsheetProps {
   data: Record<string, unknown>[];
@@ -311,6 +312,10 @@ const JsonSpreadsheet: React.FC<JsonSpreadsheetProps> = ({
     downloadFile(lines.join("\n"), "table-export.csv", "text/csv");
   }, [columns, data]);
 
+  const exportXml = useCallback(() => {
+    downloadFile(rowsToXml(columns, data), "table-export.xml", "application/xml");
+  }, [columns, data]);
+
   const exportJsonAsArray = useCallback(() => {
     const jsonData = data.map((row) => {
       const obj: Record<string, unknown> = {};
@@ -344,6 +349,9 @@ const JsonSpreadsheet: React.FC<JsonSpreadsheetProps> = ({
       <div className="flex items-center gap-1 px-3 py-1.5 border-b bg-card shrink-0 justify-end" style={{ borderColor: "hsl(var(--grid-line))" }}>
         <button onClick={exportCsv} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
           <FileSpreadsheet size={13} /> CSV
+        </button>
+        <button onClick={exportXml} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
+          <CodeXml size={13} /> XML
         </button>
         <JsonExportButton onExportArray={exportJsonAsArray} onExportObject={exportJsonAsObject} />
       </div>

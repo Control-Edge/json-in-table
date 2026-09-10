@@ -6,6 +6,7 @@ import JsonTreeEditor from "./JsonTreeEditor";
 import ComparePickerTree from "./ComparePickerTree";
 import CompareTable from "./CompareTable";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./ui/resizable";
+import { xmlToJson, isXmlText } from "@/lib/xml";
 
 type ViewMode = "spreadsheet" | "tree" | "compare";
 
@@ -292,6 +293,23 @@ const JsonEditor: React.FC = () => {
     }
   }, []);
 
+  const addXmlTab = useCallback((name: string, xmlText: string) => {
+    try {
+      const parsed = xmlToJson(xmlText);
+      const viewMode = detectViewMode(parsed);
+      const flatData = flattenForSpreadsheet(parsed);
+      const columns = extractColumns(flatData);
+      const id = crypto.randomUUID();
+      setTabs((prev) => [...prev, { id, name, rawData: parsed, data: flatData, columns, viewMode, comparePaths: [] }]);
+      setActiveTabId(id);
+      setError(null);
+      setShowPaste(false);
+      setPasteValue("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Invalid XML");
+    }
+  }, []);
+
   const addData = useCallback((name: string, text: string) => {
     const trimmed = text.trim();
     // Try JSON first if it looks like JSON
@@ -301,8 +319,13 @@ const JsonEditor: React.FC = () => {
         addTab(name, trimmed);
         return;
       } catch {
-        // Not valid JSON, fall through to CSV
+        // Not valid JSON, fall through to XML/CSV
       }
+    }
+    // Try XML
+    if (isXmlText(trimmed)) {
+      addXmlTab(name, trimmed);
+      return;
     }
     // Try CSV
     if (isTabularText(trimmed)) {
@@ -315,7 +338,7 @@ const JsonEditor: React.FC = () => {
     } catch {
       addTab(name, trimmed);
     }
-  }, [addTab, addCsvTab]);
+  }, [addTab, addCsvTab, addXmlTab]);
 
   const handleFileUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -325,7 +348,7 @@ const JsonEditor: React.FC = () => {
         const reader = new FileReader();
         reader.onload = (ev) => {
           const text = ev.target?.result as string;
-          const name = file.name.replace(/\.(json|csv)$/i, "");
+          const name = file.name.replace(/\.(json|csv|xml)$/i, "");
           addData(name, text);
         };
         reader.readAsText(file);
@@ -417,10 +440,10 @@ const JsonEditor: React.FC = () => {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     Array.from(e.dataTransfer.files).forEach((file) => {
-      if (file.name.endsWith(".json") || file.name.endsWith(".csv")) {
+      if (file.name.endsWith(".json") || file.name.endsWith(".csv") || file.name.endsWith(".xml")) {
         const reader = new FileReader();
         reader.onload = (ev) => {
-          addData(file.name.replace(/\.(json|csv)$/i, ""), ev.target?.result as string);
+          addData(file.name.replace(/\.(json|csv|xml)$/i, ""), ev.target?.result as string);
         };
         reader.readAsText(file);
       }
@@ -477,7 +500,7 @@ const JsonEditor: React.FC = () => {
           </button>
           <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer">
             <Upload size={14} /> Upload
-            <input type="file" accept=".json,.csv" multiple className="hidden" onChange={handleFileUpload} />
+            <input type="file" accept=".json,.csv,.xml" multiple className="hidden" onChange={handleFileUpload} />
           </label>
         </div>
       </header>
@@ -487,7 +510,7 @@ const JsonEditor: React.FC = () => {
         <div className="px-4 py-3 border-b border-border bg-card shrink-0">
           <textarea
             className="w-full h-28 bg-background border border-border rounded p-3 text-xs font-mono text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-            placeholder='Paste JSON or CSV here...'
+            placeholder='Paste JSON, CSV, or XML here...'
             value={pasteValue}
             onChange={(e) => { setPasteValue(e.target.value); setError(null); }}
           />
@@ -615,7 +638,7 @@ const JsonEditor: React.FC = () => {
           </div>
           <div className="text-center">
             <p className="text-sm font-medium text-foreground mb-1">No data loaded</p>
-            <p className="text-xs">Drop JSON/CSV files here, upload, or paste data to start editing</p>
+            <p className="text-xs">Drop JSON/CSV/XML files here, upload, or paste data to start editing</p>
           </div>
         </div>
       )}

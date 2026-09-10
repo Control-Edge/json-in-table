@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { X, FileSpreadsheet, ArrowUp, ArrowDown, ArrowUpDown, SlidersHorizontal, EyeOff } from "lucide-react";
+import { X, FileSpreadsheet, CodeXml, ArrowUp, ArrowDown, ArrowUpDown, SlidersHorizontal, EyeOff } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -11,6 +11,7 @@ import {
 } from "./ui/dropdown-menu";
 import JsonExportButton from "./JsonExportButton";
 import { downloadFile, escapeCsv } from "@/lib/exportFile";
+import { rowsToXml } from "@/lib/xml";
 
 interface CompareTableProps {
   data: unknown;
@@ -323,6 +324,16 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
     downloadFile(lines.join("\n"), "fields-export.csv", "text/csv");
   }, [tableData]);
 
+  const exportXml = useCallback(() => {
+    const { headers, rows } = tableData;
+    const objects = rows.map((row) => {
+      const obj: Record<string, unknown> = {};
+      headers.forEach((h, i) => { obj[h] = row[i] === "—" ? null : parseInput(row[i]); });
+      return obj;
+    });
+    downloadFile(rowsToXml(headers, objects), "fields-export.xml", "application/xml");
+  }, [tableData]);
+
   const exportJsonAsArray = useCallback(() => {
     const { headers, rows } = tableData;
     const jsonData = rows.map((row) => {
@@ -494,6 +505,9 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
           <button onClick={exportCsv} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
             <FileSpreadsheet size={13} /> CSV
           </button>
+          <button onClick={exportXml} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
+            <CodeXml size={13} /> XML
+          </button>
           <JsonExportButton onExportArray={exportJsonAsArray} onExportObject={exportJsonAsObject} />
         </div>
         <div className="overflow-auto flex-1 relative" ref={scrollRef}>
@@ -613,6 +627,9 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
       <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border bg-card shrink-0 justify-end">
         <button onClick={exportCsv} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
           <FileSpreadsheet size={13} /> CSV
+        </button>
+        <button onClick={exportXml} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors">
+          <CodeXml size={13} /> XML
         </button>
         <JsonExportButton onExportArray={exportJsonAsArray} onExportObject={exportJsonAsObject} />
       </div>
