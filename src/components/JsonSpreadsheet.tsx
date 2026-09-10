@@ -304,7 +304,9 @@ const JsonSpreadsheet: React.FC<JsonSpreadsheetProps> = ({
   const exportCsv = useCallback(() => {
     const lines = [
       columns.map(escapeCsv).join(","),
-      ...data.map((row) => columns.map((col) => escapeCsv(formatCellValue(row[col]))).join(",")),
+      ...data.map((row) =>
+        columns.map((col) => escapeCsv(row[col] == null ? "" : formatCellValue(row[col]))).join(",")
+      ),
     ];
     downloadFile(lines.join("\n"), "table-export.csv", "text/csv");
   }, [columns, data]);

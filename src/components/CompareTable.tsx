@@ -104,6 +104,10 @@ const parseInput = (text: string): unknown => {
   return text;
 };
 
+/** Cell display strings use "—" for missing/undefined and "null" for null; CSV has no such
+ * sentinel, so both should become an empty cell rather than exporting the placeholder text. */
+const csvCellValue = (display: string): string => (display === "—" || display === "null" ? "" : display);
+
 /** Inline editable cell */
 const EditableCell: React.FC<{
   value: unknown;
@@ -312,7 +316,10 @@ const CompareTable: React.FC<CompareTableProps> = ({ data, selectedPaths, onRemo
 
   const exportCsv = useCallback(() => {
     const { headers, rows } = tableData;
-    const lines = [headers.map(escapeCsv).join(","), ...rows.map((r) => r.map(escapeCsv).join(","))];
+    const lines = [
+      headers.map(escapeCsv).join(","),
+      ...rows.map((r) => r.map((v) => escapeCsv(csvCellValue(v))).join(",")),
+    ];
     downloadFile(lines.join("\n"), "fields-export.csv", "text/csv");
   }, [tableData]);
 
