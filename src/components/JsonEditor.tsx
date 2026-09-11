@@ -437,9 +437,9 @@ const JsonEditor: React.FC = () => {
       <header className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <FileJson className="text-primary" size={22} />
-          <h1 className="text-sm font-semibold tracking-tight">JSON Editor</h1>
+          <h1 className="text-sm font-semibold tracking-tight">JSON Table</h1>
           <a
-            href="https://github.com/Control-Edge/json-in-table"
+            href="https://github.com/Control-Edge/jsontable"
             target="_blank"
             rel="noopener noreferrer"
             className="ml-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -627,7 +627,7 @@ const JsonEditor: React.FC = () => {
           Control Edge AB
         </a>
         <a
-          href="https://github.com/Control-Edge/json-in-table/releases"
+          href="https://github.com/Control-Edge/jsontable/releases"
           target="_blank"
           rel="noopener noreferrer"
           className="text-muted-foreground/50 hover:text-foreground transition-colors underline"

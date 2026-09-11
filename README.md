@@ -29,8 +29,8 @@ Try it live at **[jsonastable.com](https://jsonastable.com)**
 
 ```bash
 # Clone the repo
-git clone https://github.com/Control-Edge/json-in-table.git
-cd json-in-table
+git clone https://github.com/Control-Edge/jsontable.git
+cd jsontable
 
 # Install dependencies
 npm install
