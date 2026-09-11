@@ -458,11 +458,10 @@ const JsonEditor: React.FC = () => {
               <button
                 key={value}
                 onClick={() => setTheme(value)}
-                className={`p-1.5 rounded transition-colors ${
-                  theme === value
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`p-1.5 rounded transition-colors ${theme === value
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
                 title={value.charAt(0).toUpperCase() + value.slice(1)}
               >
                 {icon}
@@ -516,11 +515,10 @@ const JsonEditor: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTabId(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 text-xs border-r border-border transition-colors shrink-0 ${
-                tab.id === activeTabId
-                  ? "bg-background text-foreground border-b-2 border-b-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-              }`}
+              className={`flex items-center gap-2 px-4 py-2 text-xs border-r border-border transition-colors shrink-0 ${tab.id === activeTabId
+                ? "bg-background text-foreground border-b-2 border-b-primary"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                }`}
             >
               <FileJson size={12} />
               <span className="max-w-[120px] truncate">{tab.name}</span>
@@ -542,11 +540,10 @@ const JsonEditor: React.FC = () => {
                     <button
                       key={mode}
                       onClick={() => toggleViewMode(activeTab.id, mode)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors rounded ${
-                        activeTab.viewMode === mode
-                          ? "text-primary bg-primary/10"
-                          : "text-muted-foreground hover:text-primary hover:bg-secondary/50"
-                      }`}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors rounded ${activeTab.viewMode === mode
+                        ? "text-primary bg-primary/10"
+                        : "text-muted-foreground hover:text-primary hover:bg-secondary/50"
+                        }`}
                     >
                       {icons[mode]} {labels[mode]}
                     </button>
@@ -622,10 +619,6 @@ const JsonEditor: React.FC = () => {
 
       {/* Footer */}
       <footer className="flex items-center justify-center px-4 py-2 border-t border-border shrink-0 text-xs text-muted-foreground gap-1">
-        <span>© {new Date().getFullYear()}</span>
-        <a href="https://cedge.se" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
-          Control Edge AB
-        </a>
         <a
           href="https://github.com/Control-Edge/jsontable/releases"
           target="_blank"
@@ -633,6 +626,19 @@ const JsonEditor: React.FC = () => {
           className="text-muted-foreground/50 hover:text-foreground transition-colors underline"
         >
           v{__APP_VERSION__}
+        </a>
+        <span>·</span>
+        <span>© {new Date().getFullYear()}</span>
+        <a href="https://cedge.se" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
+          Control Edge AB
+        </a>
+        <span>· makers of</span>
+        <a href="https://cppmodel.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
+          CppModel
+        </a>
+        <span>·</span>
+        <a href="#/privacy" className="underline hover:text-foreground transition-colors">
+          Privacy
         </a>
       </footer>
     </div>

@@ -54,3 +54,7 @@ Contributions are welcome! Feel free to open issues and pull requests.
 ## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+---
+
+Built by [Control Edge AB](https://cedge.se), makers of [CppModel](https://cppmodel.com), a C++ framework for composable simulation models.
