@@ -3,7 +3,7 @@
 A fast, browser-based JSON viewer and editor with multiple synchronized views — Tree, Spreadsheet, and Fields — plus side-by-side comparison. Paste or import JSON and explore it instantly.
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Live Demo](https://img.shields.io/badge/demo-jsonastable.com-green)](https://jsonastable.com)
+[![Live Demo](https://img.shields.io/badge/demo-jsontable.io-green)](https://jsontable.io)
 
 ## Features
 
@@ -16,7 +16,7 @@ A fast, browser-based JSON viewer and editor with multiple synchronized views �
 
 ## Demo
 
-Try it live at **[jsonastable.com](https://jsonastable.com)**
+Try it live at **[jsontable.io](https://jsontable.io)**
 
 ## Tech Stack
 
