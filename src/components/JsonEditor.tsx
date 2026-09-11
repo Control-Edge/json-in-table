@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
-import { Upload, ClipboardPaste, X, Download, FileJson, Table, GitBranch, Columns, Sun, Moon, Monitor, Github } from "lucide-react";
+import { Upload, ClipboardPaste, X, FileJson, Table, GitBranch, Columns, Sun, Moon, Monitor, Github } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
+import { JsonTableIcon } from "./BrandLogo";
 import JsonSpreadsheet from "./JsonSpreadsheet";
 import JsonTreeEditor from "./JsonTreeEditor";
 import ComparePickerTree from "./ComparePickerTree";
@@ -402,18 +403,6 @@ const JsonEditor: React.FC = () => {
     setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, columns } : t)));
   }, []);
 
-  const exportTab = useCallback((tab: JsonTab) => {
-    const exportData = tab.rawData;
-    const json = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${tab.name}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, []);
-
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     Array.from(e.dataTransfer.files).forEach((file) => {
@@ -436,8 +425,8 @@ const JsonEditor: React.FC = () => {
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
-          <FileJson className="text-primary" size={22} />
-          <h1 className="text-sm font-semibold tracking-tight">JSON Table</h1>
+          <JsonTableIcon className="text-primary" width={22} height={22} />
+          <h1 className="font-heading text-sm font-bold tracking-tight">JSON as Table</h1>
           <a
             href="https://github.com/Control-Edge/jsontable"
             target="_blank"
@@ -549,12 +538,6 @@ const JsonEditor: React.FC = () => {
                     </button>
                   );
                 })}
-                <button
-                  onClick={() => exportTab(activeTab)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-primary transition-colors rounded hover:bg-secondary/50"
-                >
-                  <Download size={14} /> Export
-                </button>
               </>
             )}
           </div>

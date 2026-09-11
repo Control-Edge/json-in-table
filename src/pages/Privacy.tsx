@@ -6,7 +6,7 @@ const Privacy = () => {
           ← Back to JSON as Table
         </a>
 
-        <h1 className="mt-6 mb-2 text-2xl font-bold">Privacy &amp; Cookies</h1>
+        <h1 className="mt-6 mb-2 text-2xl font-heading font-bold">Privacy &amp; Cookies</h1>
         <p className="mb-8 text-sm text-muted-foreground">
           JSON as Table is built and maintained by Control Edge AB.
         </p>
