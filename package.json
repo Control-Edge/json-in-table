@@ -1,7 +1,7 @@
 {
   "name": "vite_react_shadcn_ts",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.4",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Control-Edge/json-in-table.git"
+    "url": "https://github.com/Control-Edge/jsontable.git"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -101,8 +101,8 @@
     "wait-on": "^9.1.0"
   },
   "build": {
-    "appId": "se.cedge.json-in-table",
-    "productName": "JSON as Table",
+    "appId": "se.cedge.jsontable",
+    "productName": "JSON Table",
     "files": [
       "dist/**/*",
       "electron/**/*"
@@ -116,7 +116,7 @@
     "publish": {
       "provider": "github",
       "owner": "Control-Edge",
-      "repo": "json-in-table"
+      "repo": "jsontable"
     }
   }
 }
